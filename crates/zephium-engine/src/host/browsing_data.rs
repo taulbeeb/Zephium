@@ -24,6 +24,11 @@ pub(super) fn admitted_profile(
 ) -> Result<ProfileId, EngineDataFailure> {
     let profile = match partition {
         Partition::Default(profile) | Partition::Persistent(profile) => profile,
+        // Container stores exist only where the engine binds them.
+        #[cfg(target_os = "macos")]
+        Partition::Container(profile, _) => profile,
+        #[cfg(not(target_os = "macos"))]
+        Partition::Container(..) => return Err(EngineDataFailure::Unsupported),
         Partition::Ephemeral(_) => return Err(EngineDataFailure::Unsupported),
     };
     if erasing.contains(&profile) {
@@ -57,16 +62,53 @@ impl EngineHost {
         #[cfg(target_os = "macos")]
         {
             use crate::platform::imp::browsing_data as native;
+            // A container's partition reaches its own store, never the
+            // profile's; admission already refused a private one.
+            let Some(store) = crate::container_website_data::store_identifier(partition) else {
+                done.finish(EngineDataReply::Failed(EngineDataFailure::Unsupported));
+                return;
+            };
+            let _ = profile;
             match call {
-                EngineDataCall::Clear { kinds, since } => {
-                    native::clear(profile, kinds, since, done)
-                }
-                EngineDataCall::Sites => native::sites(profile, done),
-                EngineDataCall::ForgetSite { site, .. } => native::forget_site(profile, site, done),
+                EngineDataCall::Clear { kinds, since } => native::clear(store, kinds, since, done),
+                EngineDataCall::Sites => native::sites(store, done),
+                EngineDataCall::ForgetSite { site, .. } => native::forget_site(store, site, done),
             }
         }
         #[cfg(target_os = "windows")]
         self.windows_browsing_data(partition, profile, call, done);
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl EngineHost {
+    /// Erases the stores of `profile`'s containers outside `keep`. A page
+    /// still open in one of them keeps its store, and the answer is `false`.
+    pub(crate) fn retain_container_data(
+        &mut self,
+        profile: ProfileId,
+        keep: Vec<zephium_core::ids::ContainerId>,
+        done: Box<dyn FnOnce(bool) + Send>,
+    ) {
+        if self.erasure_tombstones.contains(&profile) {
+            done(false);
+            return;
+        }
+        let in_use = self
+            .partitions
+            .values()
+            .chain(self.spare.iter().map(|spare| &spare.partition))
+            .any(|partition| match *partition {
+                Partition::Container(owner, container) => {
+                    owner == profile && !keep.contains(&container)
+                }
+                _ => false,
+            });
+        if in_use {
+            done(false);
+            return;
+        }
+        crate::platform::imp::retain_container_stores(profile, keep, done);
     }
 }
 

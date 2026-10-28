@@ -340,7 +340,7 @@ fn validate_data_store_postcondition(
                 return Err("ephemeral WKWebView exposed a durable data-store identifier".into());
             }
         }
-        Partition::Default(profile) | Partition::Persistent(profile) => {
+        Partition::Default(_) | Partition::Persistent(_) | Partition::Container(..) => {
             if has_expected_ephemeral_store {
                 return Err("durable WKWebView received an ephemeral data-store proof".into());
             }
@@ -349,9 +349,9 @@ fn validate_data_store_postcondition(
                     "durable WKWebView received a non-persistent website data store".into(),
                 );
             }
-            if identifier != Some(profile.bytes()) {
+            if identifier != crate::container_website_data::store_identifier(partition) {
                 return Err(
-                    "durable WKWebView data-store identifier does not match its profile".into(),
+                    "durable WKWebView data-store identifier does not match its partition".into(),
                 );
             }
         }
@@ -1725,6 +1725,34 @@ mod tests {
             true,
             Some(profile.bytes()),
             true,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn a_container_view_must_be_bound_to_exactly_its_containers_store() {
+        let profile = ProfileId::from(7);
+        let container = zephium_core::ids::ContainerId::from(9);
+        let other = zephium_core::ids::ContainerId::from(10);
+        let partition = Partition::Container(profile, container);
+        let own = crate::container_website_data::identifier(profile, container);
+        assert!(validate_data_store_postcondition(partition, true, Some(own), false).is_ok());
+        for wrong in [
+            Some(profile.bytes()),
+            Some(crate::container_website_data::identifier(profile, other)),
+            Some(crate::work_website_data::identifier(profile)),
+            None,
+        ] {
+            assert!(validate_data_store_postcondition(partition, true, wrong, false).is_err());
+        }
+        assert!(validate_data_store_postcondition(partition, false, Some(own), false).is_err());
+        assert!(validate_data_store_postcondition(partition, true, Some(own), true).is_err());
+        // The profile's own view is not satisfied by a container's store.
+        assert!(validate_data_store_postcondition(
+            Partition::Persistent(profile),
+            true,
+            Some(own),
+            false
         )
         .is_err());
     }

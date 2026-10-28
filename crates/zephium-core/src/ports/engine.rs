@@ -749,6 +749,20 @@ pub trait Engine {
             crate::browsing_data::EngineDataFailure::Unsupported,
         ));
     }
+    /// Removes the website data of every container of `profile` except those
+    /// in `keep`, and answers whether none of the removed remains. The shell
+    /// closes a deleted container's tabs first; a store an open page still
+    /// uses is not removed and the answer is `false`, so the shell retries at
+    /// a later sweep. Engines that bind no container stores have nothing to
+    /// remove.
+    fn retain_container_data(
+        &self,
+        _profile: ProfileId,
+        _keep: Vec<crate::ids::ContainerId>,
+        done: Box<dyn FnOnce(bool) + Send>,
+    ) {
+        done(true);
+    }
     /// Browser-owned file actions. Only trusted Shell admission supplies the
     /// profile partition; the caller supplies IDs, never filesystem paths.
     fn download_call(

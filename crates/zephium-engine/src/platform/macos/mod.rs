@@ -618,12 +618,29 @@ fn erase_named_profile_data(erasure: ProfileErasure) {
         erasure.finish(zephium_core::ports::engine::ProfileDataErasureOutcome::Failed);
         return;
     }
-    // The profile's own store, then Work's own store for the profile.
-    let identifiers = vec![
-        erasure.profile.bytes(),
-        crate::work_website_data::identifier(erasure.profile),
-    ];
-    remove_named_stores(identifiers, Vec::new(), erasure);
+    use wry::WebViewExtDarwin;
+
+    // The profile's own store, Work's own store for the profile, then every
+    // container store it owns. Containers are found by enumeration, so a
+    // store whose container record is already gone is erased as well.
+    let profile = erasure.profile;
+    let listed_erasure = erasure.clone();
+    let result =
+        <wry::WebView as WebViewExtDarwin>::fetch_data_store_identifiers(move |identifiers| {
+            let mut pending = vec![
+                profile.bytes(),
+                crate::work_website_data::identifier(profile),
+            ];
+            pending.extend(
+                identifiers
+                    .iter()
+                    .filter(|id| crate::container_website_data::belongs_to(id, profile)),
+            );
+            remove_named_stores(pending, Vec::new(), listed_erasure);
+        });
+    if result.is_err() {
+        erasure.finish(zephium_core::ports::engine::ProfileDataErasureOutcome::Failed);
+    }
 }
 
 /// Removes each present named store in turn. Every step re-enumerates the
@@ -659,6 +676,87 @@ fn remove_named_stores(pending: Vec<[u8; 16]>, removed: Vec<[u8; 16]>, erasure: 
         });
     if result.is_err() {
         erasure.finish(zephium_core::ports::engine::ProfileDataErasureOutcome::Failed);
+    }
+}
+
+/// Removes every container store of `profile` except those of `keep`, and
+/// answers whether a fresh listing then shows none of the removed. Erasing a
+/// deleted container, and sweeping stores a failed earlier deletion left
+/// behind, are both this call. A store still used by an open page fails.
+pub(crate) fn retain_container_stores(
+    profile: zephium_core::ids::ProfileId,
+    keep: Vec<zephium_core::ids::ContainerId>,
+    done: Box<dyn FnOnce(bool) + Send>,
+) {
+    use wry::WebViewExtDarwin;
+
+    let sweep = ContainerSweep(Arc::new(std::sync::Mutex::new(Some(done))));
+    if initialize_data_store_enumeration().is_err() {
+        sweep.finish(false);
+        return;
+    }
+    let listed = sweep.clone();
+    let result =
+        <wry::WebView as WebViewExtDarwin>::fetch_data_store_identifiers(move |identifiers| {
+            let kept: Vec<[u8; 16]> = keep
+                .iter()
+                .map(|container| crate::container_website_data::identifier(profile, *container))
+                .collect();
+            let doomed: Vec<[u8; 16]> = identifiers
+                .iter()
+                .filter(|id| {
+                    crate::container_website_data::belongs_to(id, profile) && !kept.contains(id)
+                })
+                .copied()
+                .collect();
+            remove_container_stores(doomed, Vec::new(), listed);
+        });
+    if result.is_err() {
+        sweep.finish(false);
+    }
+}
+
+/// Answers a container sweep exactly once, from whichever callback ends it.
+#[derive(Clone)]
+struct ContainerSweep(Arc<std::sync::Mutex<Option<Box<dyn FnOnce(bool) + Send>>>>);
+
+impl ContainerSweep {
+    fn finish(&self, ok: bool) {
+        let done = self.0.lock().ok().and_then(|mut done| done.take());
+        if let Some(done) = done {
+            done(ok);
+        }
+    }
+}
+
+fn remove_container_stores(pending: Vec<[u8; 16]>, removed: Vec<[u8; 16]>, sweep: ContainerSweep) {
+    use wry::WebViewExtDarwin;
+
+    let listed = sweep.clone();
+    let result =
+        <wry::WebView as WebViewExtDarwin>::fetch_data_store_identifiers(move |identifiers| {
+            if removed.iter().any(|id| identifiers.contains(id)) {
+                listed.finish(false);
+                return;
+            }
+            let mut present = pending.into_iter().filter(|id| identifiers.contains(id));
+            let Some(identifier) = present.next() else {
+                listed.finish(true);
+                return;
+            };
+            let rest: Vec<_> = present.collect();
+            let mut removed = removed;
+            <wry::WebView as WebViewExtDarwin>::remove_data_store(&identifier, move |result| {
+                if result.is_err() {
+                    listed.finish(false);
+                    return;
+                }
+                removed.push(identifier);
+                remove_container_stores(rest, removed, listed);
+            });
+        });
+    if result.is_err() {
+        sweep.finish(false);
     }
 }
 

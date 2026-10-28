@@ -50,8 +50,18 @@ pub use platform::windows::{
 mod work_site_session;
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 mod work_website_data;
+// Only macOS binds container stores so far.
+#[cfg(target_os = "macos")]
+mod container_website_data;
 
 pub use haptics::{haptic, Haptic};
+
+/// Whether this platform gives a container's tabs their own website data
+/// store. Where it does not, container tabs are refused, never opened in the
+/// profile's own store.
+pub const fn container_storage_supported() -> bool {
+    cfg!(target_os = "macos")
+}
 
 #[cfg(all(target_os = "windows", feature = "agentic-browser"))]
 pub use platform::windows::{install_work_rendering_backing, remove_work_rendering_backing};
@@ -2334,6 +2344,30 @@ impl Engine for WebviewEngine {
             completion.finish(zephium_core::browsing_data::EngineDataReply::Failed(
                 zephium_core::browsing_data::EngineDataFailure::Unsupported,
             ));
+        }
+    }
+    fn retain_container_data(
+        &self,
+        profile: ProfileId,
+        keep: Vec<zephium_core::ids::ContainerId>,
+        done: Box<dyn FnOnce(bool) + Send>,
+    ) {
+        #[cfg(target_os = "macos")]
+        {
+            if !lock_retirement_gate(&self.retirement).profile_is_active(profile) {
+                done(false);
+                return;
+            }
+            // A refused or torn-down dispatch never runs the sweep; the shell
+            // keeps the containers it meant to remove and sweeps again later.
+            let _ = self.run(move || {
+                let _ = host::try_with(move |host| host.retain_container_data(profile, keep, done));
+            });
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (profile, keep);
+            done(true);
         }
     }
     fn download_call(

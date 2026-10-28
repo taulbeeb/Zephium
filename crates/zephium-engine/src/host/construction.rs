@@ -111,6 +111,14 @@ impl EngineHost {
                 .emit_for(event_token, EngineEvent::ViewCreationFailed { id });
             return;
         }
+        // Never open a container's page in another store: where the engine
+        // cannot bind a container's own, the tab does not load.
+        if matches!(partition, Partition::Container(..)) && !crate::container_storage_supported() {
+            eprintln!("privacy: container storage is not available on this platform");
+            self.sink
+                .emit_for(event_token, EngineEvent::ViewCreationFailed { id });
+            return;
+        }
         if !self.has_applied_content_policy(partition.profile()) {
             eprintln!("content blocker: rejected view creation before explicit policy application");
             self.sink
@@ -1009,7 +1017,11 @@ impl EngineHost {
                         Some(store),
                     )
                 }
-                Partition::Default(profile) | Partition::Persistent(profile) => {
+                // A container's page carries its profile's extensions; only
+                // the website data store below differs.
+                Partition::Default(profile)
+                | Partition::Persistent(profile)
+                | Partition::Container(profile, _) => {
                     use wry::WebViewBuilderExtMacos;
                     let configuration = self.webext.configuration(profile, &self.sink);
                     if crate::platform::imp::proxy::apply(
@@ -1628,15 +1640,17 @@ impl EngineHost {
         }
 
         builder = match partition {
-            Partition::Default(profile) | Partition::Persistent(profile) => {
+            Partition::Default(_) | Partition::Persistent(_) | Partition::Container(..) => {
                 #[cfg(target_os = "macos")]
                 {
                     use wry::WebViewBuilderExtDarwin;
-                    builder.with_data_store_identifier(profile.bytes())
+                    match crate::container_website_data::store_identifier(partition) {
+                        Some(store) => builder.with_data_store_identifier(store),
+                        None => builder,
+                    }
                 }
                 #[cfg(not(target_os = "macos"))]
                 {
-                    let _ = profile;
                     builder
                 }
             }

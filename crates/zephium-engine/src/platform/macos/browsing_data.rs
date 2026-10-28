@@ -20,7 +20,6 @@ use objc2_web_kit::{
 use zephium_core::browsing_data::{
     host_is_on_site, EngineDataCompletion, EngineDataFailure, EngineDataKinds, EngineDataReply,
 };
-use zephium_core::ids::ProfileId;
 
 use crate::data_kinds::{
     merge_sites, webkit_plan, WebKitDataType, WebKitStep, WEBKIT_CACHE, WEBKIT_SITE_DATA,
@@ -29,22 +28,17 @@ use crate::data_kinds::{
 /// Records scanned from one listing before the rest are left out.
 const MAX_RECORDS: usize = 16_384;
 
-/// The native identifier of the profile's own store. Work's store is named by
-/// a different, derived identifier and never by this one.
-pub(crate) fn profile_store_identifier(profile: ProfileId) -> [u8; 16] {
-    profile.bytes()
-}
-
-fn profile_store(profile: ProfileId) -> Option<Retained<WKWebsiteDataStore>> {
+/// The durable store named `identifier`: a profile's own or one of its
+/// containers', as admitted by the host for the call's partition.
+fn named_store(store: [u8; 16]) -> Option<Retained<WKWebsiteDataStore>> {
     let mtm = MainThreadMarker::new()?;
-    let identifier = NSUUID::from_bytes(profile_store_identifier(profile));
+    let identifier = NSUUID::from_bytes(store);
     // SAFETY: main thread (`mtm`); the retained store outlives these calls.
     let store = unsafe { WKWebsiteDataStore::dataStoreForIdentifier(&identifier, mtm) };
     // SAFETY: as above.
     let exact = unsafe {
         store.isPersistent()
-            && store.identifier().map(|value| value.as_bytes())
-                == Some(profile_store_identifier(profile))
+            && store.identifier().map(|value| value.as_bytes()) == Some(identifier.as_bytes())
     };
     exact.then_some(store)
 }
@@ -84,7 +78,7 @@ fn finish_once(
 /// Removes `kinds` modified at or after `since`, or all of them. Open pages
 /// keep running: nothing here reloads or closes a view.
 pub(crate) fn clear(
-    profile: ProfileId,
+    store_id: [u8; 16],
     kinds: EngineDataKinds,
     since: Option<i64>,
     done: EngineDataCompletion,
@@ -94,7 +88,7 @@ pub(crate) fn clear(
         done.finish(EngineDataReply::Cleared);
         return;
     }
-    let Some(store) = profile_store(profile) else {
+    let Some(store) = named_store(store_id) else {
         done.finish(EngineDataReply::Failed(EngineDataFailure::Unavailable));
         return;
     };
@@ -178,8 +172,8 @@ fn remove_records(
 }
 
 /// The hosts the profile holds cookies and site data for.
-pub(crate) fn sites(profile: ProfileId, done: EngineDataCompletion) {
-    let Some(store) = profile_store(profile) else {
+pub(crate) fn sites(store_id: [u8; 16], done: EngineDataCompletion) {
+    let Some(store) = named_store(store_id) else {
         done.finish(EngineDataReply::Failed(EngineDataFailure::Unavailable));
         return;
     };
@@ -211,8 +205,8 @@ pub(crate) fn sites(profile: ProfileId, done: EngineDataCompletion) {
 }
 
 /// Removes cookies, storage and cache for every record on `site`.
-pub(crate) fn forget_site(profile: ProfileId, site: String, done: EngineDataCompletion) {
-    let Some(store) = profile_store(profile) else {
+pub(crate) fn forget_site(store_id: [u8; 16], site: String, done: EngineDataCompletion) {
+    let Some(store) = named_store(store_id) else {
         done.finish(EngineDataReply::Failed(EngineDataFailure::Unavailable));
         return;
     };
@@ -230,25 +224,6 @@ pub(crate) fn forget_site(profile: ProfileId, site: String, done: EngineDataComp
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn the_profile_store_is_never_the_work_store_or_another_profiles() {
-        let first = ProfileId::generate();
-        let second = ProfileId::generate();
-        assert_eq!(profile_store_identifier(first), first.bytes());
-        assert_ne!(
-            profile_store_identifier(first),
-            crate::work_website_data::identifier(first)
-        );
-        assert_ne!(
-            profile_store_identifier(first),
-            profile_store_identifier(second)
-        );
-        assert_ne!(
-            profile_store_identifier(first),
-            crate::work_website_data::identifier(second)
-        );
-    }
 
     #[test]
     fn every_data_type_maps_to_its_webkit_constant() {
