@@ -169,8 +169,9 @@ jobs:
     needs: changes
     # Runs when the scope check itself failed, so a broken check never skips a job.
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.rust == 'true') }}
-    runs-on: macos-15
-    timeout-minutes: 45
+    # Fork-only: hosted Apple Silicon runners were not being acquired.
+    runs-on: macos-15-intel
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
