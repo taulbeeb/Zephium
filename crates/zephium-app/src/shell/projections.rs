@@ -208,6 +208,7 @@ impl Shell {
                 && offered.tabs == snapshot.tabs
                 && offered.active == snapshot.active
                 && offered.split_group == snapshot.split_group
+                && offered.containers == snapshot.containers
         });
         if !same {
             *last = Some(snapshot.clone());
