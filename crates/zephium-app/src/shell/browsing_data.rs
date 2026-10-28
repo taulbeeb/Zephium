@@ -187,6 +187,19 @@ impl Shell {
         }
     }
 
+    /// The profile's own store, then each of its containers' stores: what
+    /// clearing a profile's data reaches.
+    fn data_partitions(&self, partition: Partition) -> Vec<Partition> {
+        let profile = partition.profile();
+        std::iter::once(partition)
+            .chain(
+                self.containers
+                    .of_profile(profile)
+                    .map(|container| Partition::Container(profile, container.id)),
+            )
+            .collect()
+    }
+
     fn forget_site(
         &mut self,
         partition: Partition,
@@ -194,23 +207,29 @@ impl Shell {
         origin: Option<String>,
         done: BrowsingDataCompletion,
     ) {
-        let join = Join::new(2, done);
+        let partitions = self.data_partitions(partition);
+        let join = Join::new(1 + partitions.len(), done);
         self.discard_browsing_backup(partition.profile(), &join);
-        let settled = join.clone();
-        self.engine.browsing_data_call(
-            partition,
-            EngineDataCall::ForgetSite { site, origin },
-            EngineDataCompletion::new(move |reply| {
-                Join::settle_result(
-                    &settled,
-                    match reply {
-                        EngineDataReply::Cleared => Ok(()),
-                        EngineDataReply::Failed(why) => Err(failure(why)),
-                        EngineDataReply::Sites { .. } => Err(BrowsingDataError::Failed),
-                    },
-                );
-            }),
-        );
+        for partition in partitions {
+            let settled = join.clone();
+            self.engine.browsing_data_call(
+                partition,
+                EngineDataCall::ForgetSite {
+                    site: site.clone(),
+                    origin: origin.clone(),
+                },
+                EngineDataCompletion::new(move |reply| {
+                    Join::settle_result(
+                        &settled,
+                        match reply {
+                            EngineDataReply::Cleared => Ok(()),
+                            EngineDataReply::Failed(why) => Err(failure(why)),
+                            EngineDataReply::Sites { .. } => Err(BrowsingDataError::Failed),
+                        },
+                    );
+                }),
+            );
+        }
     }
 
     fn discard_browsing_backup(&self, profile: ProfileId, join: &Arc<Mutex<Join>>) {
@@ -237,7 +256,8 @@ impl Shell {
             site_data: cookies,
             cache,
         };
-        let parts = usize::from(!kinds.is_empty())
+        let partitions = self.data_partitions(partition);
+        let parts = usize::from(!kinds.is_empty()) * partitions.len()
             + usize::from(downloads)
             + usize::from(history)
             + usize::from(cookies);
@@ -247,14 +267,16 @@ impl Shell {
         }
 
         if !kinds.is_empty() {
-            let settled = join.clone();
-            self.engine.browsing_data_call(
-                partition,
-                EngineDataCall::Clear { kinds, since },
-                EngineDataCompletion::new(move |reply| {
-                    Join::settle(&settled, reply == EngineDataReply::Cleared)
-                }),
-            );
+            for partition in partitions {
+                let settled = join.clone();
+                self.engine.browsing_data_call(
+                    partition,
+                    EngineDataCall::Clear { kinds, since },
+                    EngineDataCompletion::new(move |reply| {
+                        Join::settle(&settled, reply == EngineDataReply::Cleared)
+                    }),
+                );
+            }
         }
         if downloads {
             let settled = join.clone();

@@ -1033,6 +1033,22 @@ impl EngineHost {
                 | Partition::Container(profile, _) => {
                     use wry::WebViewBuilderExtMacos;
                     let configuration = self.webext.configuration(profile, &self.sink);
+                    if let Partition::Container(_, container) = partition {
+                        if let Err(error) = crate::platform::imp::bind_container_store(
+                            &configuration,
+                            profile,
+                            container,
+                        ) {
+                            eprintln!("privacy: container store was not bound: {error}");
+                            if report_failure {
+                                event_permit.emit(
+                                    &self.sink,
+                                    EngineEvent::ViewCreationFailed { id: id.get() },
+                                );
+                            }
+                            return None;
+                        }
+                    }
                     if crate::platform::imp::proxy::apply(
                         &configuration,
                         crate::network::current().as_ref(),

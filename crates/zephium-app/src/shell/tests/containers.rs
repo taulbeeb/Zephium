@@ -228,3 +228,37 @@ fn containers_and_their_tabs_survive_a_restart_and_closed_tabs_reopen_in_them() 
         .expect("the closed container tab comes back");
     assert_eq!(shell.items.tab(reopened).unwrap().container(), Some(work));
 }
+
+#[test]
+fn clearing_a_profiles_site_data_reaches_each_of_its_containers() {
+    let (mut shell, engine, screen, _store) = browsed();
+    let profile = shell.windows.focused().unwrap().profile;
+    let work = create(&mut shell, &screen, "Work");
+    let answer = Arc::new(Mutex::new(None));
+    let sink = answer.clone();
+    shell.handle(Command::BrowsingDataCall {
+        expected_profile: profile,
+        call: Box::new(zephium_ipc::BrowsingDataCall::ForgetSite {
+            site: "example.com".into(),
+        }),
+        done: crate::api::BrowsingDataCompletion::new(move |response| {
+            *sink.lock().unwrap() = Some(response);
+        }),
+    });
+    assert_eq!(
+        answer.lock().unwrap().take(),
+        Some(zephium_ipc::BrowsingDataResponse::Cleared)
+    );
+    let partitions: Vec<Partition> = engine
+        .data_calls
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(partition, _)| *partition)
+        .collect();
+    assert_eq!(partitions.len(), 2);
+    assert!(partitions.contains(&Partition::Container(profile, work)));
+    assert!(partitions
+        .iter()
+        .any(|partition| partition.profile() == profile && partition.container().is_none()));
+}

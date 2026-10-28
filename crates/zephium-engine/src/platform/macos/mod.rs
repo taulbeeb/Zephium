@@ -400,6 +400,38 @@ pub(crate) fn new_ephemeral_data_store() -> Result<WebsiteDataStore, &'static st
     Ok(store)
 }
 
+/// Rebinds a profile tab's configuration, extensions and all, to one of the
+/// profile's containers' own stores. Wry keeps whatever store a supplied
+/// configuration carries, so a container's store must be set here, before
+/// the view is built; storage attestation then checks the exact store.
+pub(crate) fn bind_container_store(
+    configuration: &WKWebViewConfiguration,
+    profile: zephium_core::ids::ProfileId,
+    container: zephium_core::ids::ContainerId,
+) -> Result<(), &'static str> {
+    use objc2_foundation::{MainThreadMarker, NSUUID};
+
+    let mtm = MainThreadMarker::new().ok_or("WKWebsiteDataStore requires the main thread")?;
+    let expected = crate::container_website_data::identifier(profile, container);
+    let identifier = NSUUID::from_bytes(expected);
+    // SAFETY: `mtm` proves main-thread WebKit access; the UUID, the store and
+    // the configuration stay live for these calls.
+    unsafe {
+        let store = WKWebsiteDataStore::dataStoreForIdentifier(&identifier, mtm);
+        if !store.isPersistent()
+            || store.identifier().map(|value| value.as_bytes()) != Some(expected)
+        {
+            return Err("container WKWebsiteDataStore identity mismatch");
+        }
+        configuration.setWebsiteDataStore(&store);
+        let bound = configuration.websiteDataStore();
+        if Retained::as_ptr(&bound) != Retained::as_ptr(&store) {
+            return Err("WKWebViewConfiguration did not retain the container's store");
+        }
+    }
+    Ok(())
+}
+
 /// Build a fresh mutable configuration for one WKWebView while binding it to
 /// the profile-owned store. Configurations themselves must never be shared:
 /// Wry installs per-view scripts, delegates and scheme handlers into them.
