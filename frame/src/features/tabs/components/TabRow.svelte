@@ -167,7 +167,20 @@
     border-radius: 0;
   }
 
-  /* A container's colour runs down the row's leading edge. */
+  /* A container's colour runs down the row's leading edge, and the row takes
+     a faint tint of it. */
+  .browse-tab[data-container] {
+    background: color-mix(in oklab, var(--container-hue) 9%, transparent);
+  }
+
+  .browse-tab[data-container]:not([data-selected="true"]):hover {
+    background: color-mix(in oklab, var(--container-hue) 14%, var(--row-hover));
+  }
+
+  .browse-tab[data-container][data-selected="true"] {
+    background: color-mix(in oklab, var(--container-hue) 16%, var(--row-active));
+  }
+
   .browse-tab[data-container]::before {
     position: absolute;
     inset-block: 7px;

@@ -441,6 +441,8 @@ export const commands = {
 	containersOpenTab: (container: string | null) => __TAURI_INVOKE<OperationAdmission>("containers_open_tab", { container }),
 	/**  The tab's page again in a new tab in another container. */
 	containersReopenTab: (tab: string, container: string | null) => __TAURI_INVOKE<OperationAdmission>("containers_reopen_tab", { tab, container }),
+	/**  The container a space's new tabs open in, or none. */
+	containersSetSpaceDefault: (space: string, container: string | null) => __TAURI_INVOKE<OperationAdmission>("containers_set_space_default", { space, container }),
 	operationStatus: (operationId: string) => __TAURI_INVOKE<OperationStatus>("operation_status", { operationId }),
 	operationsReconcile: () => __TAURI_INVOKE<OperationDisposition[]>("operations_reconcile"),
 	operationAcknowledge: (operationId: string) => __TAURI_INVOKE<boolean>("operation_acknowledge", { operationId }),
@@ -3136,6 +3138,8 @@ export type SpaceView = {
 	 *  switcher to stack beside the name. A tab with no icon yet is null.
 	 */
 	previews: (IconRef | null)[],
+	/**  The container the space's new tabs open in; absent for none. */
+	container?: string | null,
 };
 
 /**

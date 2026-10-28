@@ -52,12 +52,21 @@ pub struct PersistedContainers {
     pub containers: Vec<PersistedContainer>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tabs: Vec<PersistedTabContainer>,
+    /// Spaces whose new tabs open in a container.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub spaces: Vec<PersistedSpaceContainer>,
 }
 
 impl PersistedContainers {
     pub fn is_empty(&self) -> bool {
-        self.containers.is_empty() && self.tabs.is_empty()
+        self.containers.is_empty() && self.tabs.is_empty() && self.spaces.is_empty()
     }
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PersistedSpaceContainer {
+    pub space: SpaceId,
+    pub container: ContainerId,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -226,6 +235,16 @@ pub fn snapshot_with_recently_closed(
                 })
         })
         .collect();
+    let mut space_defaults: Vec<PersistedSpaceContainer> = containers
+        .space_defaults()
+        .filter(|(space, container)| {
+            persisted_container(*container) && state.spaces.iter().any(|s| s.id == *space)
+        })
+        .map(|(space, container)| PersistedSpaceContainer { space, container })
+        .collect();
+    // Snapshots compare equal across saves; a map's order is not stable.
+    space_defaults.sort_by_key(|entry| entry.space);
+    state.containers.spaces = space_defaults;
 
     let active_space = active_space.filter(|s| state.spaces.iter().any(|x| x.id == *s));
     let persisted = |id: ItemId| state.items.iter().any(|i| i.id == id);
@@ -381,6 +400,13 @@ pub fn restore(state: SessionState) -> Restored {
                 color: c.color,
                 symbol: c.symbol,
             });
+        }
+    }
+    for entry in state.containers.spaces.into_iter().take(MAX_SESSION_SPACES) {
+        // A space defaults only to a container of its own profile.
+        let owner = spaces.get(entry.space).map(|space| space.profile);
+        if owner.is_some_and(|owner| containers.belongs_to(entry.container, owner)) {
+            containers.set_space_default(entry.space, Some(entry.container));
         }
     }
     let mut tab_containers = std::collections::HashMap::new();
@@ -1081,6 +1107,7 @@ mod tests {
                 .collect(),
             items: vec![tab(10, space), tab(11, space), tab(12, other)],
             containers: PersistedContainers {
+                spaces: Default::default(),
                 containers: vec![container(50, personal), container(51, work)],
                 tabs: vec![PersistedTabContainer {
                     item: ItemId::from(10),
@@ -1104,6 +1131,29 @@ mod tests {
             None
         );
         assert_eq!(restored.containers.iter().count(), 2);
+        assert_eq!(canonicalize(state.clone()), state);
+    }
+
+    #[test]
+    fn a_space_keeps_only_a_default_container_of_its_own_profile() {
+        let mut state = container_state();
+        state.containers.spaces = vec![
+            PersistedSpaceContainer {
+                space: SpaceId::from(2),
+                container: ContainerId::from(50),
+            },
+            PersistedSpaceContainer {
+                space: SpaceId::from(4),
+                container: ContainerId::from(50),
+            },
+        ];
+        let restored = restore(state.clone());
+        assert_eq!(
+            restored.containers.space_default(SpaceId::from(2)),
+            Some(ContainerId::from(50))
+        );
+        assert_eq!(restored.containers.space_default(SpaceId::from(4)), None);
+        state.containers.spaces.pop();
         assert_eq!(canonicalize(state.clone()), state);
     }
 

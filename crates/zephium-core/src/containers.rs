@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use crate::ids::{ContainerId, ProfileId};
+use crate::ids::{ContainerId, ProfileId, SpaceId};
 
 /// A profile keeps at most this many containers. Each is one native store.
 pub const MAX_PROFILE_CONTAINERS: usize = 16;
@@ -48,6 +48,9 @@ pub fn container_name(name: &str) -> Option<String> {
 pub struct Containers {
     order: Vec<ContainerId>,
     map: HashMap<ContainerId, Container>,
+    /// The container a space's new tabs open in. The caller proves the space
+    /// belongs to the container's profile.
+    space_defaults: HashMap<SpaceId, ContainerId>,
 }
 
 impl Containers {
@@ -111,7 +114,36 @@ impl Containers {
     pub fn remove(&mut self, id: ContainerId) -> Option<Container> {
         let container = self.map.remove(&id)?;
         self.order.retain(|candidate| *candidate != id);
+        self.space_defaults.retain(|_, default| *default != id);
         Some(container)
+    }
+
+    /// The container `space`'s new tabs open in, if it has one.
+    pub fn space_default(&self, space: SpaceId) -> Option<ContainerId> {
+        self.space_defaults.get(&space).copied()
+    }
+
+    /// Every space with a default container, in no particular order.
+    pub fn space_defaults(&self) -> impl Iterator<Item = (SpaceId, ContainerId)> + '_ {
+        self.space_defaults
+            .iter()
+            .map(|(space, container)| (*space, *container))
+    }
+
+    /// Makes `container` the default of `space`, or clears it with `None`.
+    /// Refuses a container that does not exist; the caller proves the space
+    /// is the container's profile's.
+    pub fn set_space_default(&mut self, space: SpaceId, container: Option<ContainerId>) -> bool {
+        match container {
+            Some(id) if !self.map.contains_key(&id) => false,
+            Some(id) => self.space_defaults.insert(space, id) != Some(id),
+            None => self.space_defaults.remove(&space).is_some(),
+        }
+    }
+
+    /// Forgets the defaults of spaces that no longer exist.
+    pub fn retain_spaces(&mut self, exists: impl Fn(SpaceId) -> bool) {
+        self.space_defaults.retain(|space, _| exists(*space));
     }
 
     /// Drops every container of a removed profile and returns them, so the
@@ -189,6 +221,23 @@ mod tests {
         assert!(!containers.update(id, "Shopping", 1, CONTAINER_SYMBOLS));
         assert_eq!(containers.get(id), Some(&kept));
         assert!(!containers.update(ContainerId::from(9), "Missing", 0, 0));
+    }
+
+    #[test]
+    fn a_space_default_names_a_live_container_and_goes_with_it() {
+        let mut containers = Containers::default();
+        assert!(containers.insert(container(1, 1)));
+        let (space, other) = (SpaceId::from(5), SpaceId::from(6));
+        assert!(!containers.set_space_default(space, Some(ContainerId::from(9))));
+        assert!(containers.set_space_default(space, Some(ContainerId::from(1))));
+        assert!(!containers.set_space_default(space, Some(ContainerId::from(1))));
+        assert!(containers.set_space_default(other, Some(ContainerId::from(1))));
+        assert_eq!(containers.space_default(space), Some(ContainerId::from(1)));
+        containers.retain_spaces(|candidate| candidate != other);
+        assert_eq!(containers.space_default(other), None);
+        assert!(containers.remove(ContainerId::from(1)).is_some());
+        assert_eq!(containers.space_default(space), None);
+        assert!(!containers.set_space_default(space, None));
     }
 
     #[test]

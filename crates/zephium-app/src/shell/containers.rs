@@ -44,6 +44,23 @@ impl Shell {
             ContainerCommand::ReopenIn { tab, container } => {
                 self.reopen_in_container(profile, tab, container)
             }
+            ContainerCommand::SetSpaceDefault { space, container } => {
+                if self
+                    .spaces
+                    .get(space)
+                    .is_none_or(|owner| owner.profile != profile)
+                    || container.is_some_and(|id| !self.containers.belongs_to(id, profile))
+                {
+                    return rejected(OperationReason::InvalidScope);
+                }
+                if !self.containers.set_space_default(space, container) {
+                    return operation_result(
+                        OperationOutcome::NoOp,
+                        OperationReason::StateUnchanged,
+                    );
+                }
+                self.containers_changed()
+            }
         }
     }
 
@@ -234,5 +251,6 @@ impl Shell {
 
 /// Whether container tabs can be opened here at all.
 fn zephium_engine_supports_containers() -> bool {
-    cfg!(target_os = "macos")
+    // Tests drive containers through the fake engine on every platform.
+    cfg!(any(target_os = "macos", test))
 }

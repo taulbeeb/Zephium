@@ -2313,6 +2313,7 @@ mod audio;
 mod blocker;
 mod bootstrap;
 mod browsing_data;
+mod containers;
 mod engine_events;
 mod export;
 mod extension_actions;
@@ -2341,9 +2342,6 @@ mod search;
 mod shutdown;
 mod site_permissions;
 mod spaces;
-// Only macOS binds container stores.
-#[cfg(target_os = "macos")]
-mod containers;
 mod tabs;
 mod time;
 mod view_lifecycle;

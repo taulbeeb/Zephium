@@ -10,6 +10,7 @@
   import { onMount, untrack } from "svelte";
   import "./space-hue.css";
   import { SPACE_COLORS, SPACE_SYMBOLS, emojiOf } from "../lib/space-look";
+  import { containerHue } from "$shared/lib/container-hue";
 
   let {
     space,
@@ -33,11 +34,14 @@
     icon: space.icon,
     color: space.color,
     theme: space.theme,
+    container: space.container ?? null,
   }));
   let name = $state(original.name);
   let icon = $state<SpaceIconView | null>(original.icon);
   let color = $state(original.color);
   let chosen = $state<SpaceThemeView | null>(original.theme);
+  let container = $state<string | null>(original.container);
+  const containers = $derived(tabs.containers());
   let emoji = $state(original.icon?.kind === "emoji" ? original.icon.text : "");
   let failed = $state(false);
   let confirming = $state(false);
@@ -72,6 +76,16 @@
     void commit();
   }
 
+  // The container is not part of the look: it has its own command, and
+  // applies as soon as it is chosen.
+  async function chooseContainer(value: string | null) {
+    if (value === container) return;
+    container = value;
+    dirty = true;
+    const result = await tabs.setSpaceDefault(id, value);
+    failed = result.outcome === "failed" || result.outcome === "rejected";
+  }
+
   function typeName(text: string) {
     name = text;
     dirty = true;
@@ -99,6 +113,7 @@
       color = original.color;
       chosen = original.theme;
       void commit();
+      if (container !== original.container) void tabs.setSpaceDefault(id, original.container);
     }
     onclose(false);
   }
@@ -296,6 +311,34 @@
         </div>
       </div>
 
+      {#if containers.length > 0}
+        <div class="group" role="radiogroup" aria-labelledby="space-container-label">
+          <div class="group-head">
+            <span id="space-container-label">{m.space_container()}</span>
+          </div>
+          <div class="containers">
+            <button
+              type="button"
+              role="radio"
+              class="container-chip"
+              aria-checked={container === null}
+              onclick={() => void chooseContainer(null)}>{m.space_container_none()}</button
+            >
+            {#each containers as entry (entry.id)}
+              <button
+                type="button"
+                role="radio"
+                class="container-chip"
+                aria-checked={container === entry.id}
+                style:--container-hue={containerHue(entry.color)}
+                onclick={() => void chooseContainer(entry.id)}
+                ><span class="container-dot"></span>{entry.name}</button
+              >
+            {/each}
+          </div>
+        </div>
+      {/if}
+
       {#if failed}<p class="editor-error" role="alert">{m.space_save_failed()}</p>{/if}
     </div>
 
@@ -472,6 +515,50 @@
 
   .symbol-none[aria-checked="true"] {
     color: var(--color-text);
+  }
+
+  .containers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .container-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-inline-size: 100%;
+    min-block-size: 24px;
+    padding-inline: 9px;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--radius-capsule);
+    background: var(--row-hover);
+    color: var(--color-label-secondary);
+    font: inherit;
+    font-size: var(--text-caption);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition:
+      background-color var(--motion-fast) var(--ease-out),
+      box-shadow var(--motion-fast) var(--ease-out);
+  }
+
+  .container-chip:hover {
+    background: var(--row-pressed);
+  }
+
+  .container-chip[aria-checked="true"] {
+    color: var(--color-text);
+    box-shadow: inset 0 0 0 1.5px var(--container-hue, var(--color-accent));
+  }
+
+  .container-dot {
+    flex: none;
+    inline-size: 8px;
+    block-size: 8px;
+    border-radius: 50%;
+    background: var(--container-hue);
   }
 
   .colors {

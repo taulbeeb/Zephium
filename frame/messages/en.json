@@ -3870,5 +3870,7 @@
   "tab_in_container": "{title}, in {container}",
   "native_new_container_tab": "New Container Tab",
   "native_open_in_container": "Open in Container",
-  "native_no_container": "No Container"
+  "native_no_container": "No Container",
+  "space_container": "New tabs open in",
+  "space_container_none": "No Container"
 }

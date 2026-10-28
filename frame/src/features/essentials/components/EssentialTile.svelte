@@ -8,6 +8,7 @@
   import CaptureControl from "$shared/ui/CaptureControl";
   import AudioControl from "$shared/ui/AudioControl";
   import { tabs } from "$domain/tabs";
+  import { containerHue } from "$shared/lib/container-hue";
 
   let {
     tab,
@@ -36,7 +37,12 @@
   // An Essential with no page behind it only keeps its site; one that has a
   // page can be closed without being let go.
   let open = $derived(tab.availability?.state !== "sleeping");
-  let name = $derived(tab.title || m.untitled_tab());
+  let container = $derived(tabs.containerOf(tab));
+  let name = $derived(
+    container
+      ? m.tab_in_container({ title: tab.title || m.untitled_tab(), container: container.name })
+      : tab.title || m.untitled_tab(),
+  );
 
   function closePage(event: MouseEvent) {
     event.stopPropagation();
@@ -66,6 +72,8 @@
   data-open={open}
   data-active={active}
   data-split-candidate={splitCandidate}
+  data-container={container ? "" : undefined}
+  style:--container-hue={container ? containerHue(container.color) : undefined}
 >
   <button
     type="button"
@@ -169,6 +177,33 @@
     box-shadow: inset 0 0 0 1px var(--color-accent);
   }
 
+  /* A container's Essential wears its colour: the plate takes a tint of it,
+     and a dot in the corner names it when the tint is hard to see. */
+  .essential[data-container] > button[data-plate] {
+    background: color-mix(in oklab, var(--container-hue) 20%, var(--color-tile));
+  }
+
+  .essential[data-container] > button[data-plate]:hover {
+    background: color-mix(in oklab, var(--container-hue) 28%, var(--color-tile-hover));
+  }
+
+  .essential[data-container] > button[data-plate][aria-current="page"] {
+    background: color-mix(in oklab, var(--container-hue) 30%, var(--color-fill-active));
+    box-shadow: inset 0 0 0 1.5px var(--container-hue);
+  }
+
+  .essential[data-container]::before {
+    content: "";
+    position: absolute;
+    inset-block-start: 5px;
+    inset-inline-start: 5px;
+    width: 6px;
+    height: 6px;
+    border-radius: var(--radius-capsule);
+    background: var(--container-hue);
+    pointer-events: none;
+  }
+
   /* A dot under the mark says a page is open behind the tile, and the plate
      lit as it is for the current tab says which one is in front. A closed
      Essential has neither: it is only the site. */
@@ -224,7 +259,8 @@
   }
 
   @media (forced-colors: active) {
-    .essential[data-open="true"]::after {
+    .essential[data-open="true"]::after,
+    .essential[data-container]::before {
       background: CanvasText;
     }
 

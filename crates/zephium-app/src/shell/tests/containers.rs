@@ -269,3 +269,85 @@ fn clearing_a_profiles_site_data_reaches_each_of_its_containers() {
         .iter()
         .any(|partition| partition.profile() == profile && partition.container().is_none()));
 }
+
+#[test]
+fn a_spaces_new_tabs_open_in_its_default_container_unless_told_otherwise() {
+    let (mut shell, engine, screen, _store) = browsed();
+    let space = shell.windows.focused().unwrap().space;
+    let work = create(&mut shell, &screen, "Work");
+    let set = container_op(
+        &mut shell,
+        ContainerCommand::SetSpaceDefault {
+            space,
+            container: Some(work),
+        },
+    );
+    assert_eq!(set.outcome, OperationOutcome::Applied);
+    let view = last(&screen)
+        .spaces
+        .into_iter()
+        .find(|view| view.id == space.to_string())
+        .unwrap();
+    assert_eq!(view.container, Some(work.to_string()));
+
+    shell.handle(Command::Open);
+    let tab = active_id(&screen);
+    assert_eq!(shell.items.tab(tab).unwrap().container(), Some(work));
+    navigate_and_commit(&mut shell, tab, "mail.example");
+    assert!(engine
+        .calls()
+        .iter()
+        .any(|call| call.starts_with(&format!("create {tab} "))
+            && call.ends_with(&format!("[container {work}]"))));
+
+    // An explicit "No Container" still opens in the profile's own store.
+    let plain = container_op(&mut shell, ContainerCommand::OpenTab(None));
+    assert_ne!(plain.outcome, OperationOutcome::Rejected);
+    assert_eq!(
+        shell.items.tab(active_id(&screen)).unwrap().container(),
+        None
+    );
+
+    // Deleting the container takes the default with it.
+    assert_ne!(
+        container_op(&mut shell, ContainerCommand::Delete(work)).outcome,
+        OperationOutcome::Rejected
+    );
+    assert_eq!(shell.containers.space_default(space), None);
+    shell.handle(Command::Open);
+    assert_eq!(
+        shell.items.tab(active_id(&screen)).unwrap().container(),
+        None
+    );
+}
+
+#[test]
+fn a_space_default_must_be_a_container_of_the_spaces_profile() {
+    let (mut shell, _engine, screen, _store) = browsed();
+    let space = shell.windows.focused().unwrap().space;
+    for command in [
+        ContainerCommand::SetSpaceDefault {
+            space,
+            container: Some(ContainerId::generate()),
+        },
+        ContainerCommand::SetSpaceDefault {
+            space: zephium_core::ids::SpaceId::generate(),
+            container: None,
+        },
+    ] {
+        assert_eq!(
+            container_op(&mut shell, command).outcome,
+            OperationOutcome::Rejected
+        );
+    }
+    let work = create(&mut shell, &screen, "Work");
+    let cleared = container_op(
+        &mut shell,
+        ContainerCommand::SetSpaceDefault {
+            space,
+            container: None,
+        },
+    );
+    assert_eq!(cleared.outcome, OperationOutcome::NoOp);
+    let _ = work;
+}

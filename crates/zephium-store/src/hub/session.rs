@@ -37,6 +37,24 @@ struct BoundedContainers {
     containers: Vec<BoundedContainer>,
     #[serde(default, deserialize_with = "deserialize_bounded_tab_containers")]
     tabs: Vec<BoundedTabContainer>,
+    #[serde(default, deserialize_with = "deserialize_bounded_space_containers")]
+    spaces: Vec<BoundedSpaceContainer>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BoundedSpaceContainer {
+    space: SpaceId,
+    container: zephium_core::ids::ContainerId,
+}
+
+fn deserialize_bounded_space_containers<'de, D>(
+    deserializer: D,
+) -> Result<Vec<BoundedSpaceContainer>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    bounded_json::deserialize_bounded_vec(deserializer, MAX_SESSION_SPACES, |_| true)
 }
 
 #[derive(serde::Deserialize)]
@@ -344,6 +362,15 @@ impl BoundedSessionState {
                     .map(|tab| zephium_core::session::PersistedTabContainer {
                         item: tab.item,
                         container: tab.container,
+                    })
+                    .collect(),
+                spaces: self
+                    .containers
+                    .spaces
+                    .into_iter()
+                    .map(|entry| zephium_core::session::PersistedSpaceContainer {
+                        space: entry.space,
+                        container: entry.container,
                     })
                     .collect(),
             },
@@ -1802,6 +1829,64 @@ mod closed_session_wire_tests {
         value["recently_closed"][0]["closed_at_ms"] = serde_json::json!(1_700_000_000_123_u64);
         assert!(decode_authoritative_snapshot(&value.to_string()).is_some());
         value["recently_closed"][0]["unknown"] = serde_json::json!(true);
+        assert!(decode_authoritative_snapshot(&value.to_string()).is_none());
+    }
+
+    #[test]
+    fn containers_survive_the_bounded_decoder_and_unknown_fields_are_refused() {
+        use zephium_core::ids::ContainerId;
+        use zephium_core::session::{
+            PersistedContainer, PersistedContainers, PersistedSpaceContainer, PersistedTabContainer,
+        };
+        let (profile, space, item) = (ProfileId::from(1), SpaceId::from(2), ItemId::from(3));
+        let container = ContainerId::from(4);
+        let state = SessionState {
+            profiles: vec![PersistedProfile {
+                id: profile,
+                name: "P".into(),
+                kind: ProfileKind::Default,
+            }],
+            spaces: vec![PersistedSpace {
+                id: space,
+                profile,
+                name: "S".into(),
+                look: Default::default(),
+            }],
+            items: vec![PersistedItem {
+                id: item,
+                parent: None,
+                placement: Placement::Space {
+                    space,
+                    section: SpaceSection::Today,
+                },
+                kind: PersistedKind::Tab {
+                    url: "https://example.test/".into(),
+                    title: "Example".into(),
+                    zoom: 1.0,
+                    last_active_ms: None,
+                },
+            }],
+            containers: PersistedContainers {
+                containers: vec![PersistedContainer {
+                    id: container,
+                    profile,
+                    name: "Work".into(),
+                    color: 1,
+                    symbol: 0,
+                }],
+                tabs: vec![PersistedTabContainer { item, container }],
+                spaces: vec![PersistedSpaceContainer { space, container }],
+            },
+            ..SessionState::default()
+        };
+        let state = core_session::canonicalize(state);
+        assert_eq!(state.containers.spaces.len(), 1);
+        let mut value = serde_json::to_value(&state).unwrap();
+        assert_eq!(
+            decode_authoritative_snapshot(&value.to_string()),
+            Some(state.clone())
+        );
+        value["containers"]["unknown"] = serde_json::json!(true);
         assert!(decode_authoritative_snapshot(&value.to_string()).is_none());
     }
 }

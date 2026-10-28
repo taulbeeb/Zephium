@@ -1801,6 +1801,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             containers::containers_delete,
             containers::containers_open_tab,
             containers::containers_reopen_tab,
+            containers::containers_set_space_default,
             operation_status,
             operations_reconcile,
             operation_acknowledge,
@@ -5812,7 +5813,10 @@ fn build_add_menu(
     // rather than offered and then silently refused by the actor.
     let split_view =
         build_command_menu_item_enabled(handle, &resolved, ADD_MENU_COMMAND_IDS[1], can_split)?;
-    Menu::with_items(handle, &[&new_tab, &split_view])
+    match containers::file_menu_section(handle)? {
+        Some(container_tab) => Menu::with_items(handle, &[&new_tab, &container_tab, &split_view]),
+        None => Menu::with_items(handle, &[&new_tab, &split_view]),
+    }
 }
 
 /// Delivered to privileged chrome, which holds the authoritative URL for the
@@ -6008,6 +6012,7 @@ fn build_chrome_menu(
     let item =
         |id: &str, enabled: bool| build_command_menu_item_enabled(handle, &resolved, id, enabled);
     let new_tab = item("tab.new", true)?;
+    let container_tab = containers::file_menu_section(handle)?;
     let new_private = item("window.newPrivate", true)?;
     let sides = private_window::items(handle, &resolved)?;
     let reopen = item("tab.reopen", true)?;
@@ -6020,7 +6025,11 @@ fn build_chrome_menu(
     let third = PredefinedMenuItem::separator(handle)?;
     let bookmarks = item("tool.bookmarks", true)?;
     let settings = item("browser.settings", true)?;
-    let mut items: Vec<&dyn tauri::menu::IsMenuItem<tauri::Wry>> = vec![&new_tab, &new_private];
+    let mut items: Vec<&dyn tauri::menu::IsMenuItem<tauri::Wry>> = vec![&new_tab];
+    if let Some(container_tab) = &container_tab {
+        items.push(container_tab);
+    }
+    items.push(&new_private);
     items.extend(private_window::refs(&sides));
     items.extend([
         &reopen as &dyn tauri::menu::IsMenuItem<tauri::Wry>,

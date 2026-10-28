@@ -6,7 +6,7 @@ use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 use crate::menu_text;
 use zephium_app::{Command, ContainerCommand, Handle};
-use zephium_core::ids::{ContainerId, ItemId};
+use zephium_core::ids::{ContainerId, ItemId, SpaceId};
 use zephium_ipc::{ItemsState, OperationAdmission};
 
 /// "Open in Container ▸" on the tab menu: `tabmenu.container=<id>` or
@@ -197,6 +197,28 @@ pub(crate) fn containers_reopen_tab(
             &shell,
             ContainerCommand::ReopenIn { tab, container },
         ),
+        _ => super::rejected_operation(),
+    }
+}
+
+/// The container a space's new tabs open in, or none.
+#[tauri::command]
+#[specta::specta]
+pub(crate) fn containers_set_space_default(
+    caller: WebviewWindow,
+    shell: State<'_, Handle>,
+    space: String,
+    container: Option<String>,
+) -> OperationAdmission {
+    let space = SpaceId::parse(&space).filter(|id| id.to_string() == space);
+    match (space, target_of(container.as_deref())) {
+        (Some(space), Ok(container)) if admitted(&caller, "containers_set_space_default") => {
+            dispatch(
+                caller.app_handle(),
+                &shell,
+                ContainerCommand::SetSpaceDefault { space, container },
+            )
+        }
         _ => super::rejected_operation(),
     }
 }

@@ -12,6 +12,7 @@
   import CaptureControl from "$shared/ui/CaptureControl";
   import AudioControl from "$shared/ui/AudioControl";
   import { favicons } from "$domain/favicons";
+  import { containerHue } from "$shared/lib/container-hue";
 
   let {
     entries,
@@ -66,20 +67,27 @@
 >
   {#each entries as tab (tab.id)}
     {@const active = tab.id === tabs.activeId()}
+    {@const container = tabs.containerOf(tab)}
     <li
       data-motion-key={`tab:${tab.id}`}
       data-zephium-tab-id={tab.id}
       data-zephium-tab-url={tab.url ?? ""}
       data-zephium-projection-revision={tab.projection_revision}
       data-audio-host
+      data-container={container ? "" : undefined}
+      style:--container-hue={container ? containerHue(container.color) : undefined}
     >
       <button
         type="button"
         class="rail-site"
         data-plate
-        title={tab.title || m.untitled_tab()}
+        title={container
+          ? m.tab_in_container({ title: tab.title || m.untitled_tab(), container: container.name })
+          : tab.title || m.untitled_tab()}
         aria-current={active ? "page" : undefined}
-        aria-label={tab.title || m.untitled_tab()}
+        aria-label={container
+          ? m.tab_in_container({ title: tab.title || m.untitled_tab(), container: container.name })
+          : tab.title || m.untitled_tab()}
         oncontextmenu={(event) => handleContextMenu(event, tab)}
         onpointerdown={(event) => drag.down(event, tab.id)}
         onpointermove={(event) => drag.move(event)}
@@ -191,5 +199,23 @@
   .rail-site[aria-current="page"] {
     background: var(--color-fill-active);
     box-shadow: var(--row-rim);
+  }
+
+  /* A container's kept site wears a ring and tint of its colour. */
+  [data-container] > .rail-site {
+    background: color-mix(in oklab, var(--container-hue) 20%, var(--color-tile));
+    box-shadow:
+      inset 0 0 0 1.5px var(--container-hue),
+      var(--shadow-tile);
+  }
+
+  [data-container] > .rail-site[aria-current="page"] {
+    background: color-mix(in oklab, var(--container-hue) 30%, var(--color-fill-active));
+  }
+
+  @media (forced-colors: active) {
+    [data-container] > .rail-site {
+      outline: 2px solid CanvasText;
+    }
   }
 </style>

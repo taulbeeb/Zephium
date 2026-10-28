@@ -178,6 +178,12 @@ impl Shell {
         if !self.items.insert_tab(id, today) {
             return None;
         }
+        // A space's new tabs open in its default container. Callers that
+        // name a container, or copy a tab's, assign theirs over this.
+        let default = self.containers.space_default(space);
+        if default.is_some() {
+            self.items.assign_container(id, default);
+        }
         if position == NewTabPosition::AfterCurrent {
             let roots = self.items.roots(today);
             if let Some(at) =

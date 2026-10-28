@@ -538,6 +538,10 @@ pub struct SpaceView {
     /// The icons of its first tabs in sidebar order, at most three, for the
     /// switcher to stack beside the name. A tab with no icon yet is null.
     pub previews: Vec<Option<IconRef>>,
+    /// The container the space's new tabs open in; absent for none.
+    #[serde(default)]
+    #[specta(optional)]
+    pub container: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]

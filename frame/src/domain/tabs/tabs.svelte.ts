@@ -264,3 +264,6 @@ export const updateContainer = (id: string, name: string, color: number, symbol:
 export const deleteContainer = (id: string) => settle(commands.containersDelete(id));
 /** A new tab in the container, or in the profile's own store with null. */
 export const openContainerTab = (id: string | null) => settle(commands.containersOpenTab(id));
+/** The container a space's new tabs open in, or none with null. */
+export const setSpaceDefault = (space: string, container: string | null) =>
+  settle(commands.containersSetSpaceDefault(space, container));

@@ -275,6 +275,11 @@ pub enum ContainerCommand {
         tab: ItemId,
         container: Option<zephium_core::ids::ContainerId>,
     },
+    /// The container a space's new tabs open in, or none.
+    SetSpaceDefault {
+        space: zephium_core::ids::SpaceId,
+        container: Option<zephium_core::ids::ContainerId>,
+    },
 }
 
 /// What the person chose for a page's request to open another application

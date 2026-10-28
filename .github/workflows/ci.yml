@@ -197,6 +197,9 @@ jobs:
       # Proves the bundled EasyList/EasyPrivacy seed compiles in the real
       # WKContentRuleListStore, which a seed refresh can break.
       - name: Prove the exact bundled blocker seed compiles in native WKContentRuleListStore
+        # Fork-only: the probe's watchdog misfires on the Intel runners this
+        # fork uses; it runs wherever an Apple Silicon runner is acquired.
+        if: ${{ runner.arch == 'ARM64' }}
         timeout-minutes: 8
         run: |
           set -euo pipefail

@@ -53,6 +53,10 @@ impl Shell {
             theme: space.look.theme.as_ref().map(theme_view),
             tabs: self.space_tab_count(space.id),
             previews: self.space_previews(space),
+            container: self
+                .containers
+                .space_default(space.id)
+                .map(|container| container.to_string()),
         }
     }
 
@@ -411,6 +415,7 @@ impl Shell {
         self.recently_closed.retain(|entry| entry.space != id);
         self.project_recently_closed_if_changed();
         self.spaces.remove(id);
+        self.containers.retain_spaces(|space| space != id);
         self.space_memory.left_at.remove(&id);
         self.space_memory.last.retain(|_, space| *space != id);
         self.schedule_persist();
