@@ -74,6 +74,7 @@ ulid_id!(ClosedSessionId);
 ulid_id!(ItemId);
 ulid_id!(SpaceId);
 ulid_id!(ProfileId);
+ulid_id!(ContainerId);
 ulid_id!(ExtensionInstallId);
 ulid_id!(PagePermissionGrantId);
 ulid_id!(ScriptId);

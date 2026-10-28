@@ -8,6 +8,8 @@ pub mod bookmarks;
 pub mod browsing_data;
 pub mod certificates;
 pub mod commands;
+/// Separate cookie jars inside one persistent profile.
+pub mod containers;
 pub mod downloads;
 pub mod export;
 pub mod extensions;

@@ -6,7 +6,8 @@ use std::collections::HashSet;
 
 use url::Url;
 
-use crate::ids::{ClosedSessionId, ItemId, ProfileId, SpaceId};
+use crate::containers::{Container, Containers};
+use crate::ids::{ClosedSessionId, ContainerId, ItemId, ProfileId, SpaceId};
 use crate::item::{
     sanitize_page_title, BrowserOwnedTab, Item, ItemKind, Placement, TabContent, TabState,
 };
@@ -37,6 +38,41 @@ pub struct SessionState {
     pub splits: Option<Pane>,
     #[serde(default)]
     pub recently_closed: Vec<PersistedClosedTab>,
+    /// Absent on snapshots from before containers, and when there are none.
+    #[serde(default, skip_serializing_if = "PersistedContainers::is_empty")]
+    pub containers: PersistedContainers,
+}
+
+/// Containers and the tabs opened in them. Tab membership is kept beside the
+/// item tree rather than in it, so a snapshot without containers is
+/// byte-for-byte the shape it always was.
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PersistedContainers {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub containers: Vec<PersistedContainer>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tabs: Vec<PersistedTabContainer>,
+}
+
+impl PersistedContainers {
+    pub fn is_empty(&self) -> bool {
+        self.containers.is_empty() && self.tabs.is_empty()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PersistedContainer {
+    pub id: ContainerId,
+    pub profile: ProfileId,
+    pub name: String,
+    pub color: u8,
+    pub symbol: u8,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PersistedTabContainer {
+    pub item: ItemId,
+    pub container: ContainerId,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -99,6 +135,9 @@ pub struct PersistedClosedTab {
     /// Real Unix close time, bounded to JavaScript's exact integer range.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub closed_at_ms: Option<u64>,
+    /// The container the tab was open in, so reopening it keeps its sign-ins.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub container: Option<ContainerId>,
     /// Where the tab stood among its space's open tabs, for putting it back.
     /// Kept for this run only: a snapshot that names it could not be read
     /// back by the release before, so a restart restores to the end.
@@ -122,6 +161,7 @@ pub fn snapshot(
         active_item,
         splits,
         &[],
+        &Containers::default(),
     )
 }
 
@@ -134,6 +174,7 @@ pub fn snapshot_with_recently_closed(
     active_item: Option<ItemId>,
     splits: Option<&Pane>,
     recently_closed: &[PersistedClosedTab],
+    containers: &Containers,
 ) -> SessionState {
     let mut state = SessionState::default();
 
@@ -159,6 +200,33 @@ pub fn snapshot_with_recently_closed(
         }
     }
 
+    let persisted_profile = |profile: ProfileId| state.profiles.iter().any(|p| p.id == profile);
+    state.containers.containers = containers
+        .iter()
+        .filter(|c| persisted_profile(c.profile))
+        .map(|c| PersistedContainer {
+            id: c.id,
+            profile: c.profile,
+            name: c.name.clone(),
+            color: c.color,
+            symbol: c.symbol,
+        })
+        .collect();
+    let persisted_container =
+        |id: ContainerId| state.containers.containers.iter().any(|c| c.id == id);
+    state.containers.tabs = state
+        .items
+        .iter()
+        .filter_map(|item| {
+            let container = items.tab(item.id)?.container?;
+            (matches!(item.kind, PersistedKind::Tab { .. }) && persisted_container(container))
+                .then_some(PersistedTabContainer {
+                    item: item.id,
+                    container,
+                })
+        })
+        .collect();
+
     let active_space = active_space.filter(|s| state.spaces.iter().any(|x| x.id == *s));
     let persisted = |id: ItemId| state.items.iter().any(|i| i.id == id);
     let in_active_scope = |id: ItemId| {
@@ -182,6 +250,13 @@ pub fn snapshot_with_recently_closed(
                 .spaces
                 .iter()
                 .any(|space| space.id == entry.space && space.profile == entry.profile)
+                && entry.container.is_none_or(|id| {
+                    state
+                        .containers
+                        .containers
+                        .iter()
+                        .any(|c| c.id == id && c.profile == entry.profile)
+                })
         });
     state
 }
@@ -248,6 +323,7 @@ pub struct Restored {
     pub active_item: Option<ItemId>,
     pub splits: Option<Pane>,
     pub recently_closed: Vec<PersistedClosedTab>,
+    pub containers: Containers,
 }
 
 /// Rebuilds a persistence snapshot through the same validation path used at
@@ -263,6 +339,7 @@ pub fn canonicalize(state: SessionState) -> SessionState {
         restored.active_item,
         restored.splits.as_ref(),
         &restored.recently_closed,
+        &restored.containers,
     )
 }
 
@@ -291,13 +368,52 @@ pub fn restore(state: SessionState) -> Restored {
         }
     }
 
+    let mut containers = Containers::default();
+    for c in state.containers.containers {
+        if profiles
+            .get(c.profile)
+            .is_some_and(|profile| profile.kind != ProfileKind::Incognito)
+        {
+            containers.insert(Container {
+                id: c.id,
+                profile: c.profile,
+                name: c.name,
+                color: c.color,
+                symbol: c.symbol,
+            });
+        }
+    }
+    let mut tab_containers = std::collections::HashMap::new();
+    for entry in state.containers.tabs.into_iter().take(MAX_SESSION_ITEMS) {
+        // A tab named twice is ambiguous; it is dropped below, not guessed.
+        if tab_containers
+            .insert(entry.item, Some(entry.container))
+            .is_some()
+        {
+            tab_containers.insert(entry.item, None);
+        }
+    }
+
     let mut items = Items::default();
     let mut browser_tabs = HashSet::new();
     for i in state.items.into_iter().take(MAX_SESSION_ITEMS) {
         let (Placement::Favorites { space } | Placement::Space { space, .. }) = i.placement;
-        if spaces.get(space).is_none() {
+        let Some(owner) = spaces.get(space).map(|space| space.profile) else {
             continue;
-        }
+        };
+        // A page must never run with sign-ins it was not opened with: a tab
+        // whose container is gone or another profile's is dropped, never
+        // moved into its profile's own store.
+        let container = match tab_containers.get(&i.id) {
+            None => None,
+            Some(Some(container))
+                if matches!(i.kind, PersistedKind::Tab { .. })
+                    && containers.belongs_to(*container, owner) =>
+            {
+                Some(*container)
+            }
+            Some(_) => continue,
+        };
         let kind = match i.kind {
             PersistedKind::Folder { name } => ItemKind::Folder {
                 name: bounded_name(&name, "Folder"),
@@ -324,6 +440,7 @@ pub fn restore(state: SessionState) -> Restored {
                 };
                 tab.last_active_ms =
                     last_active_ms.filter(|ms| (1_000..=MAX_EXACT_MS).contains(ms));
+                tab.container = container;
                 ItemKind::Tab(tab)
             }
             PersistedKind::BrowserTab { page } => {
@@ -363,6 +480,9 @@ pub fn restore(state: SessionState) -> Restored {
             && spaces
                 .get(entry.space)
                 .is_some_and(|space| space.profile == entry.profile)
+            && entry
+                .container
+                .is_none_or(|id| containers.belongs_to(id, entry.profile))
     });
 
     Restored {
@@ -373,6 +493,7 @@ pub fn restore(state: SessionState) -> Restored {
         active_item,
         splits,
         recently_closed,
+        containers,
     }
 }
 
@@ -413,6 +534,7 @@ fn canonical_recently_closed(
                 },
                 session_id: entry.session_id,
                 closed_at_ms: entry.closed_at_ms,
+                container: entry.container,
                 position: entry
                     .position
                     .filter(|position| (*position as usize) < MAX_SESSION_ITEMS),
@@ -641,6 +763,7 @@ mod tests {
         let (profiles, spaces, items, profile, space) = seed();
         let mut recent = (0..(MAX_RECENTLY_CLOSED_TABS + 3))
             .map(|index| PersistedClosedTab {
+                container: Default::default(),
                 profile,
                 space,
                 url: format!("https://example.com/{index}"),
@@ -652,6 +775,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
         recent.push(PersistedClosedTab {
+            container: Default::default(),
             profile: ProfileId::from(999),
             space,
             url: "https://foreign.example/".into(),
@@ -662,6 +786,7 @@ mod tests {
             position: None,
         });
         recent.push(PersistedClosedTab {
+            container: Default::default(),
             profile,
             space,
             url: "file:///private.txt".into(),
@@ -680,6 +805,7 @@ mod tests {
             None,
             None,
             &recent,
+            &Containers::default(),
         );
         assert_eq!(state.recently_closed.len(), MAX_RECENTLY_CLOSED_TABS);
         assert_eq!(state.recently_closed[0].url, "https://example.com/3");
@@ -698,6 +824,7 @@ mod tests {
     fn a_closed_tabs_place_lasts_the_run_and_never_reaches_the_snapshot() {
         let (profiles, spaces, items, profile, space) = seed();
         let record = |position| PersistedClosedTab {
+            container: Default::default(),
             profile,
             space,
             url: "https://example.test/place".into(),
@@ -715,6 +842,7 @@ mod tests {
             None,
             None,
             &[record(Some(3))],
+            &Containers::default(),
         );
         assert_eq!(state.recently_closed[0].position, Some(3));
         let written = serde_json::to_string(&state).unwrap();
@@ -730,6 +858,7 @@ mod tests {
             None,
             None,
             &[record(Some(u32::MAX))],
+            &Containers::default(),
         );
         assert_eq!(wild.recently_closed[0].position, None);
     }
@@ -738,6 +867,7 @@ mod tests {
     fn closed_session_metadata_is_paired_unique_and_legacy_records_remain_reopenable() {
         let (profiles, spaces, items, profile, space) = seed();
         let record = |suffix: &str, session_id, closed_at_ms| PersistedClosedTab {
+            container: Default::default(),
             profile,
             space,
             url: format!("https://example.test/{suffix}"),
@@ -761,6 +891,7 @@ mod tests {
                 record("newer", Some(same_id), Some(1_700_000_001_000)),
                 record("partial", Some(ClosedSessionId::from(8)), None),
             ],
+            &Containers::default(),
         );
         assert_eq!(state.recently_closed.len(), 2);
         assert_eq!(state.recently_closed[0].title, "legacy");
@@ -909,6 +1040,156 @@ mod tests {
         assert_eq!(canonicalize(state.clone()), state);
     }
 
+    fn container_state() -> SessionState {
+        let (personal, work) = (ProfileId::from(1), ProfileId::from(3));
+        let (space, other) = (SpaceId::from(2), SpaceId::from(4));
+        let tab = |id: u128, space: SpaceId| PersistedItem {
+            id: ItemId::from(id),
+            parent: None,
+            placement: today(space),
+            kind: PersistedKind::Tab {
+                url: format!("https://example.com/{id}"),
+                title: "E".into(),
+                zoom: 1.0,
+                last_active_ms: None,
+            },
+        };
+        let container = |id: u128, profile: ProfileId| PersistedContainer {
+            id: ContainerId::from(id),
+            profile,
+            name: format!("C{id}"),
+            color: 1,
+            symbol: 2,
+        };
+        SessionState {
+            profiles: [personal, work]
+                .into_iter()
+                .map(|id| PersistedProfile {
+                    id,
+                    name: "P".into(),
+                    kind: ProfileKind::Named,
+                })
+                .collect(),
+            spaces: [(space, personal), (other, work)]
+                .into_iter()
+                .map(|(id, profile)| PersistedSpace {
+                    id,
+                    profile,
+                    name: "S".into(),
+                    look: Default::default(),
+                })
+                .collect(),
+            items: vec![tab(10, space), tab(11, space), tab(12, other)],
+            containers: PersistedContainers {
+                containers: vec![container(50, personal), container(51, work)],
+                tabs: vec![PersistedTabContainer {
+                    item: ItemId::from(10),
+                    container: ContainerId::from(50),
+                }],
+            },
+            ..SessionState::default()
+        }
+    }
+
+    #[test]
+    fn containers_and_their_tabs_round_trip() {
+        let state = container_state();
+        let restored = restore(state.clone());
+        assert_eq!(
+            restored.items.tab(ItemId::from(10)).unwrap().container,
+            Some(ContainerId::from(50))
+        );
+        assert_eq!(
+            restored.items.tab(ItemId::from(11)).unwrap().container,
+            None
+        );
+        assert_eq!(restored.containers.iter().count(), 2);
+        assert_eq!(canonicalize(state.clone()), state);
+    }
+
+    #[test]
+    fn a_snapshot_without_containers_keeps_its_old_shape() {
+        let (profiles, spaces, mut items, _, space) = seed();
+        let id = ItemId::from(10);
+        assert!(items.insert_tab(id, today(space)));
+        navigate_and_commit(&mut items, id, "https://example.com");
+        let state = snapshot(&profiles, &spaces, &items, Some(space), Some(id), None);
+        let json = serde_json::to_string(&state).unwrap();
+        assert!(!json.contains("containers"));
+        let legacy: SessionState = serde_json::from_str(&json).unwrap();
+        assert_eq!(legacy, state);
+    }
+
+    #[test]
+    fn a_tab_never_restores_outside_the_container_it_was_opened_in() {
+        let mut state = container_state();
+        // Tab 11 names a container that is gone, and tab 12 one of another
+        // profile; tab 10 is named twice. All three are dropped, not moved
+        // into their profile's own store.
+        state.containers.tabs = vec![
+            PersistedTabContainer {
+                item: ItemId::from(11),
+                container: ContainerId::from(99),
+            },
+            PersistedTabContainer {
+                item: ItemId::from(12),
+                container: ContainerId::from(50),
+            },
+            PersistedTabContainer {
+                item: ItemId::from(10),
+                container: ContainerId::from(50),
+            },
+            PersistedTabContainer {
+                item: ItemId::from(10),
+                container: ContainerId::from(50),
+            },
+        ];
+        let restored = restore(state);
+        for id in [10, 11, 12] {
+            assert!(restored.items.get(ItemId::from(id)).is_none(), "tab {id}");
+        }
+    }
+
+    #[test]
+    fn containers_of_missing_or_private_profiles_are_dropped() {
+        let mut state = container_state();
+        state.profiles[1].kind = ProfileKind::Incognito;
+        state.containers.containers.push(PersistedContainer {
+            id: ContainerId::from(52),
+            profile: ProfileId::from(77),
+            name: "Orphan".into(),
+            color: 0,
+            symbol: 0,
+        });
+        let restored = restore(state);
+        let ids: Vec<_> = restored.containers.iter().map(|c| c.id).collect();
+        assert_eq!(ids, vec![ContainerId::from(50)]);
+    }
+
+    #[test]
+    fn a_closed_tab_keeps_only_a_container_of_its_own_profile() {
+        let mut state = container_state();
+        let closed = |container: u128| PersistedClosedTab {
+            profile: ProfileId::from(1),
+            space: SpaceId::from(2),
+            url: format!("https://example.com/{container}"),
+            title: "Closed".into(),
+            zoom: 1.0,
+            session_id: None,
+            closed_at_ms: None,
+            container: Some(ContainerId::from(container)),
+            position: None,
+        };
+        state.recently_closed = vec![closed(50), closed(51), closed(99)];
+        let restored = restore(state);
+        let kept: Vec<_> = restored
+            .recently_closed
+            .iter()
+            .map(|entry| entry.container)
+            .collect();
+        assert_eq!(kept, vec![Some(ContainerId::from(50))]);
+    }
+
     #[test]
     fn a_tabs_last_active_time_survives_restore_and_legacy_rows_have_none() {
         let profile = ProfileId::from(1);
@@ -964,6 +1245,7 @@ mod tests {
     #[test]
     fn restore_drops_dangling_references() {
         let state = SessionState {
+            containers: Default::default(),
             profiles: vec![],
             spaces: vec![PersistedSpace {
                 id: SpaceId::from(2),
@@ -1004,6 +1286,7 @@ mod tests {
         let dangerous = ItemId::from(11);
         let private_tab = ItemId::from(12);
         let state = SessionState {
+            containers: Default::default(),
             profiles: vec![
                 PersistedProfile {
                     id: profile,

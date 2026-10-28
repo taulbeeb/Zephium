@@ -26,6 +26,56 @@ struct BoundedSessionState {
     splits: Option<bounded_json::BoundedPane>,
     #[serde(default, deserialize_with = "deserialize_bounded_recently_closed")]
     recently_closed: Vec<BoundedClosedTab>,
+    #[serde(default)]
+    containers: BoundedContainers,
+}
+
+#[derive(Default, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BoundedContainers {
+    #[serde(default, deserialize_with = "deserialize_bounded_containers")]
+    containers: Vec<BoundedContainer>,
+    #[serde(default, deserialize_with = "deserialize_bounded_tab_containers")]
+    tabs: Vec<BoundedTabContainer>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BoundedContainer {
+    id: zephium_core::ids::ContainerId,
+    profile: ProfileId,
+    name: String,
+    color: u8,
+    symbol: u8,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BoundedTabContainer {
+    item: ItemId,
+    container: zephium_core::ids::ContainerId,
+}
+
+fn deserialize_bounded_containers<'de, D>(
+    deserializer: D,
+) -> Result<Vec<BoundedContainer>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    bounded_json::deserialize_bounded_vec(
+        deserializer,
+        zephium_core::containers::MAX_CONTAINERS,
+        |container| container.name.len() <= MAX_NAME_BYTES,
+    )
+}
+
+fn deserialize_bounded_tab_containers<'de, D>(
+    deserializer: D,
+) -> Result<Vec<BoundedTabContainer>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    bounded_json::deserialize_bounded_vec(deserializer, MAX_SESSION_ITEMS, |_| true)
 }
 
 #[derive(serde::Deserialize)]
@@ -81,6 +131,8 @@ struct BoundedClosedTab {
     session_id: Option<zephium_core::ids::ClosedSessionId>,
     #[serde(default)]
     closed_at_ms: Option<u64>,
+    #[serde(default)]
+    container: Option<zephium_core::ids::ContainerId>,
 }
 
 #[derive(serde::Deserialize)]
@@ -268,9 +320,33 @@ impl BoundedSessionState {
                     zoom: entry.zoom,
                     session_id: entry.session_id,
                     closed_at_ms: entry.closed_at_ms,
+                    container: entry.container,
                     position: None,
                 })
                 .collect(),
+            containers: zephium_core::session::PersistedContainers {
+                containers: self
+                    .containers
+                    .containers
+                    .into_iter()
+                    .map(|container| zephium_core::session::PersistedContainer {
+                        id: container.id,
+                        profile: container.profile,
+                        name: container.name,
+                        color: container.color,
+                        symbol: container.symbol,
+                    })
+                    .collect(),
+                tabs: self
+                    .containers
+                    .tabs
+                    .into_iter()
+                    .map(|tab| zephium_core::session::PersistedTabContainer {
+                        item: tab.item,
+                        container: tab.container,
+                    })
+                    .collect(),
+            },
         })
     }
 }

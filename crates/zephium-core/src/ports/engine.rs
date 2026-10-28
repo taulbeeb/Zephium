@@ -78,12 +78,25 @@ pub enum Partition {
     Default(ProfileId),
     Persistent(ProfileId),
     Ephemeral(ProfileId),
+    /// A container of a persistent profile: durable, with its own website
+    /// data store, while every profile-scoped authority stays the profile's.
+    Container(ProfileId, crate::ids::ContainerId),
 }
 
 impl Partition {
     pub fn profile(self) -> ProfileId {
         match self {
-            Partition::Default(p) | Partition::Persistent(p) | Partition::Ephemeral(p) => p,
+            Partition::Default(p)
+            | Partition::Persistent(p)
+            | Partition::Ephemeral(p)
+            | Partition::Container(p, _) => p,
+        }
+    }
+
+    pub fn container(self) -> Option<crate::ids::ContainerId> {
+        match self {
+            Partition::Container(_, container) => Some(container),
+            _ => None,
         }
     }
 }

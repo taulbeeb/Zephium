@@ -785,6 +785,36 @@ impl Items {
         false
     }
 
+    /// Binds a web tab to a container's store, or to the profile's own with
+    /// `None`. Refused while the tab has a native view: that view is bound to
+    /// the store it was built with, so the tab must be rebuilt, never retargeted.
+    /// The caller proves the container belongs to the tab's profile.
+    pub fn assign_container(
+        &mut self,
+        id: ItemId,
+        container: Option<crate::ids::ContainerId>,
+    ) -> bool {
+        match self.tab_mut(id) {
+            Some(tab) if tab.content == TabContent::Web && !tab.view => {
+                tab.container = container;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Every tab opened in `container`, in no particular order.
+    pub fn container_tabs(&self, container: crate::ids::ContainerId) -> Vec<ItemId> {
+        self.items
+            .iter()
+            .filter(|(_, item)| {
+                item.tab()
+                    .is_some_and(|tab| tab.container == Some(container))
+            })
+            .map(|(id, _)| *id)
+            .collect()
+    }
+
     pub fn set_zoom(&mut self, id: ItemId, zoom: f64) {
         if let Some(tab) = self.tab_mut(id) {
             tab.zoom = zoom;
@@ -816,6 +846,32 @@ mod tests {
             space: SpaceId::from(1),
             section: SpaceSection::Today,
         }
+    }
+
+    #[test]
+    fn a_container_is_set_before_the_view_and_never_retargets_a_live_one() {
+        use crate::ids::ContainerId;
+        let mut items = Items::default();
+        let (tab, folder) = (id(1), id(2));
+        let container = ContainerId::from(7);
+        assert!(items.insert_tab(tab, today()));
+        assert!(items.assign_container(tab, Some(container)));
+        assert!(!items.navigate(tab, "https://example.com/").is_empty());
+        assert!(items.tab(tab).unwrap().has_view());
+        assert!(
+            !items.assign_container(tab, None),
+            "a live view keeps its store"
+        );
+        assert_eq!(items.tab(tab).unwrap().container, Some(container));
+        assert_eq!(items.container_tabs(container), vec![tab]);
+        assert!(items.insert(Item {
+            id: folder,
+            parent: None,
+            placement: today(),
+            kind: ItemKind::Folder { name: "F".into() },
+        }));
+        assert!(!items.assign_container(folder, Some(container)));
+        assert!(!items.assign_container(id(3), Some(container)));
     }
 
     #[test]

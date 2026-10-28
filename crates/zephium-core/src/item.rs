@@ -3,7 +3,7 @@
 
 use url::Url;
 
-use crate::ids::{ItemId, SpaceId};
+use crate::ids::{ContainerId, ItemId, SpaceId};
 
 pub const MAX_PAGE_TITLE_CHARS: usize = 512;
 
@@ -138,6 +138,10 @@ pub struct TabState {
     )>,
     /// Sound and mute. Process-local: never restored or persisted.
     pub audio: crate::audio::TabAudio,
+    /// The container whose store the tab's page uses; none is the profile's
+    /// own. Set before the tab's first view and never changed while one
+    /// lives, so a native view stays bound to one store for its whole life.
+    pub container: Option<ContainerId>,
     // Distinct from `url`: a restored/hibernated tab has a url but no live view.
     pub(crate) view: bool,
 }
@@ -182,6 +186,7 @@ impl TabState {
             failure: None,
             capture: None,
             audio: crate::audio::TabAudio::default(),
+            container: None,
             view: false,
         }
     }

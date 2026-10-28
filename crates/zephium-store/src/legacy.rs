@@ -301,6 +301,7 @@ fn decode_v2(stored: StoredSession) -> Option<SessionState> {
         None => None,
     };
     Some(SessionState {
+        containers: Default::default(),
         profiles,
         spaces,
         items,
@@ -388,6 +389,7 @@ fn decode_v1(v1: V1Session) -> Option<SessionState> {
         .collect();
     let active_item = items.get(v1.active).or(items.first()).map(|i| i.id);
     Some(SessionState {
+        containers: Default::default(),
         profiles: vec![PersistedProfile {
             id: profile,
             name: "Personal".into(),
