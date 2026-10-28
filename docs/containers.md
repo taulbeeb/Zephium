@@ -84,6 +84,35 @@ and per profile, and never equal to the profile's own identifier or Work's.
 - New tab: "New Container Tab ▸" in the File menu.
 - Container tabs carry a coloured mark in the tab list and address field.
 
+## Status and known gaps
+
+Built on this branch: phases 1 to 4 below, macOS only.
+
+- **Windows and Linux** refuse container tabs and hide the menus; no
+  container store is ever opened there.
+- **Settings › Privacy › Site data** lists only the profile's own store.
+  Clearing data, all of it or one site's, reaches every container too.
+- **Extensions** run in container tabs with the profile's extension runtime.
+  An extension's own cookie access still reads the profile's store. This
+  needs checking with real extensions in the running app.
+- **Link menu**: pages use WebKit's context menu, so "Open Link in
+  Container" is not there yet. Open the link, then use the tab menu's
+  "Open in Container".
+
+## Trying it
+
+Build the development app on an Apple Silicon Mac (it runs as "Zephium
+Dev" with its own data, apart from an installed Zephium):
+
+```sh
+pnpm install --frozen-lockfile
+pnpm dev
+```
+
+Then Settings › Profile › Containers › New Container, and "New Tab" on the
+container's row, or File › New Container Tab. Sign in to the same site in a
+container tab and an ordinary tab to see two separate sessions.
+
 ## Phases
 
 1. Core model, persistence and restore, with tests.

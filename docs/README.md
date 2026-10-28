@@ -22,6 +22,7 @@ controls product intent.
 - [Tasks](design/tasks-redesign.md): the shared Tasks surface for people and agents.
 - [Charts](design/charts.md): the chart kit used by Work results and Activity.
 - [File workflows](file-workflows-windows-qa.md): upload and download ownership, recovery, and Windows acceptance checks.
+- [Containers](containers.md): separate cookie jars inside a profile, and what this fork has built of them.
 
 ## Work and AI
 
