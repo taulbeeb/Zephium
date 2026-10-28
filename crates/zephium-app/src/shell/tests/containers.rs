@@ -196,8 +196,10 @@ fn deleting_a_container_closes_its_tabs_forgets_their_history_and_erases_its_sto
         ["Keep"]
     );
     assert!(engine
-        .calls()
-        .contains(&format!("retain containers {profile} [{keep}]")));
+        .container_sweeps
+        .lock()
+        .unwrap()
+        .contains(&format!("{profile} [{keep}]")));
 }
 
 #[test]
@@ -220,8 +222,10 @@ fn containers_and_their_tabs_survive_a_restart_and_closed_tabs_reopen_in_them() 
     assert_eq!(last(&screen).containers[0].name, "Work");
     // The launch sweep keeps the stores of containers that still exist.
     assert!(engine
-        .calls()
-        .contains(&format!("retain containers {profile} [{work}]")));
+        .container_sweeps
+        .lock()
+        .unwrap()
+        .contains(&format!("{profile} [{work}]")));
 
     let (reopened, _) = shell
         .restore_recently_closed_tab(profile, None)

@@ -349,6 +349,9 @@ pub(crate) struct FakeEngine {
     fullscreen_exits: Mutex<Vec<ItemId>>,
     layout_regions: Mutex<Vec<Option<Rect>>>,
     data_calls: Mutex<Vec<(Partition, zephium_core::browsing_data::EngineDataCall)>>,
+    /// Container store sweeps, kept apart from `calls` so launch sweeps do
+    /// not disturb tests that read the exact native call sequence.
+    container_sweeps: Mutex<Vec<String>>,
     data_reply: Mutex<Option<zephium_core::browsing_data::EngineDataReply>>,
     download_calls: Mutex<Vec<(Partition, zephium_core::downloads::DownloadCall)>>,
 }
@@ -596,7 +599,10 @@ impl Engine for FakeEngine {
         done: Box<dyn FnOnce(bool) + Send>,
     ) {
         let keep: Vec<String> = keep.iter().map(ToString::to_string).collect();
-        self.log(format!("retain containers {profile} [{}]", keep.join(",")));
+        self.container_sweeps
+            .lock()
+            .unwrap()
+            .push(format!("{profile} [{}]", keep.join(",")));
         done(true);
     }
     fn create_view(&self, id: ItemId, partition: Partition, url: &str, _bounds: Rect) -> bool {
