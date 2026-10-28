@@ -343,6 +343,7 @@ fn controlled_shell() -> (
     let compiler = Arc::new(ControlledCompiler::default());
     let store = opted_out_store();
     let screen: Screen = Arc::new(Mutex::new(ItemsState {
+        containers: Default::default(),
         projection_revision: String::new(),
         profile: None,
         spaces: Vec::new(),

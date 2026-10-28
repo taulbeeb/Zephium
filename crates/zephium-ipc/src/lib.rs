@@ -60,6 +60,11 @@ pub struct TabView {
     #[serde(default)]
     #[specta(optional)]
     pub audio: Option<TabAudioView>,
+    /// The container whose store the tab's pages use; absent for the
+    /// profile's own.
+    #[serde(default)]
+    #[specta(optional)]
+    pub container: Option<String>,
 }
 
 /// The sidebar's player: the media of the tab that most recently started
@@ -603,6 +608,22 @@ pub struct ItemsState {
     pub tabs: Vec<TabView>,
     pub active: Option<String>,
     pub split_group: Option<SplitGroupView>,
+    /// The focused profile's containers, in creation order.
+    #[serde(default)]
+    pub containers: Vec<ContainerView>,
+}
+
+/// A separate cookie jar of the focused profile.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct ContainerView {
+    pub id: String,
+    pub name: String,
+    /// An index into the frame's curated container colours.
+    pub color: u8,
+    /// An index into the frame's curated container symbols.
+    pub symbol: u8,
+    /// Open and pinned tabs in it, which deleting it closes.
+    pub tabs: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Type)]

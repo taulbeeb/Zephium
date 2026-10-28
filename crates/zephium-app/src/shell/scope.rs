@@ -69,7 +69,16 @@ impl Shell {
                     .default_profile()
                     .unwrap_or(ProfileId::from(0))
             });
-        match self.profiles.get(profile).map(|p| p.kind) {
+        let kind = self.profiles.get(profile).map(|p| p.kind);
+        // A container tab only ever uses its container's store. Even a stale
+        // container keeps its own (then empty) store, never the profile's;
+        // the next sweep removes it.
+        if let Some(container) = self.items.tab(id).and_then(|tab| tab.container) {
+            if kind != Some(ProfileKind::Incognito) {
+                return Partition::Container(profile, container);
+            }
+        }
+        match kind {
             Some(ProfileKind::Named) => Partition::Persistent(profile),
             Some(ProfileKind::Incognito) => Partition::Ephemeral(profile),
             Some(ProfileKind::Default) | None => Partition::Default(profile),

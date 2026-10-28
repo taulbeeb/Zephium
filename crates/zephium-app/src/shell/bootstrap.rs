@@ -84,6 +84,7 @@ impl Shell {
                 let restored = session::restore(state);
                 self.recently_closed = restored.recently_closed;
                 self.profiles = restored.profiles;
+                self.containers = restored.containers;
                 self.spaces = restored.spaces;
                 self.items = restored.items;
                 active_item = restored.active_item;
@@ -121,6 +122,7 @@ impl Shell {
                 let restored = session::restore(state);
                 self.recently_closed = restored.recently_closed;
                 self.profiles = restored.profiles;
+                self.containers = restored.containers;
                 self.spaces = restored.spaces;
                 self.items = restored.items;
                 active_item = restored.active_item;
@@ -318,6 +320,7 @@ impl Shell {
             self.open_startup_pages();
         }
         self.archive_idle_tabs();
+        self.sweep_all_container_stores();
         if !retired_settings.is_empty() {
             self.schedule_persist();
         }

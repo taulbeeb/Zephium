@@ -8,6 +8,7 @@ fn setup_with_layout_sink() -> (Shell, Arc<FakeEngine>, Screen, LayoutSink) {
     let engine = Arc::new(FakeEngine::default());
     let layouts: LayoutSink = Arc::new(Mutex::new(None));
     let screen: Screen = Arc::new(Mutex::new(ItemsState {
+        containers: Default::default(),
         projection_revision: String::new(),
         profile: None,
         spaces: Vec::new(),

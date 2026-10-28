@@ -830,6 +830,15 @@ impl EngineHost {
             let profile = partition.profile();
             let expected_directory = match partition {
                 Partition::Ephemeral(_) => None,
+                // Linux binds no container stores; never fall back to the
+                // profile's own.
+                Partition::Container(..) => {
+                    if report_failure {
+                        event_permit
+                            .emit(&self.sink, EngineEvent::ViewCreationFailed { id: id.get() });
+                    }
+                    return None;
+                }
                 Partition::Default(_) | Partition::Persistent(_) => {
                     match crate::erasure::prepare_profile_directory(&self.profiles_root, profile) {
                         Ok(path) => Some(path),
@@ -855,7 +864,7 @@ impl EngineHost {
             let builder = if context_is_new {
                 let context = match match partition {
                     Partition::Ephemeral(_) => wry::WebContext::new_ephemeral(),
-                    Partition::Default(_) | Partition::Persistent(_) => {
+                    Partition::Default(_) | Partition::Persistent(_) | Partition::Container(..) => {
                         wry::WebContext::try_new(expected_directory.clone())
                     }
                 } {

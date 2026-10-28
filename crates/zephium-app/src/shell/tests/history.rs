@@ -774,6 +774,7 @@ fn the_menus_hear_of_closed_tabs_only_when_the_list_changes() {
 
 fn empty_items() -> ItemsState {
     ItemsState {
+        containers: Default::default(),
         projection_revision: String::new(),
         profile: None,
         spaces: Vec::new(),

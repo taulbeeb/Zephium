@@ -70,6 +70,7 @@ mod account;
 mod blocker_service;
 mod browser_credentials;
 mod browser_import;
+mod containers;
 mod content_fullscreen;
 mod data_export;
 mod default_browser;
@@ -1795,6 +1796,11 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             spaces::spaces_step,
             spaces::spaces_move_tab,
             spaces::spaces_menu_popup,
+            containers::containers_create,
+            containers::containers_update,
+            containers::containers_delete,
+            containers::containers_open_tab,
+            containers::containers_reopen_tab,
             operation_status,
             operations_reconcile,
             operation_acknowledge,
@@ -3847,6 +3853,9 @@ fn execute_command(app: &tauri::AppHandle, id: &str) -> zephium_ipc::OperationAd
     if let Some(admission) = spaces::execute(app, id) {
         return admission;
     }
+    if let Some(admission) = containers::execute(app, id) {
+        return admission;
+    }
     if matches!(id, private_window::REGULAR | private_window::PRIVATE) {
         private_window::settle_click(app);
     }
@@ -3974,6 +3983,9 @@ fn execute_tab_menu_action(
         ),
         action if action.starts_with(spaces::TAB_MENU_MOVE) => {
             spaces::move_tab(app, id, &action[spaces::TAB_MENU_MOVE.len()..])
+        }
+        action if action.starts_with(containers::TAB_MENU_REOPEN) => {
+            containers::reopen_tab(app, id, &action[containers::TAB_MENU_REOPEN.len()..])
         }
         _ => rejected_operation(),
     }
@@ -5611,8 +5623,13 @@ fn build_menu(
         .show_all_with_text(menu_text::label("Show All"))
         .separator();
     let app_menu = app_menu.item(&build_quit_menu_item(handle)?).build()?;
-    let file = SubmenuBuilder::new(handle, menu_text::label("File"))
-        .item(&item("tab.new")?)
+    let container_tab = containers::file_menu_section(handle)?;
+    let file = SubmenuBuilder::new(handle, menu_text::label("File")).item(&item("tab.new")?);
+    let file = match &container_tab {
+        Some(container_tab) => file.item(container_tab),
+        None => file,
+    };
+    let file = file
         .item(&item("window.newPrivate")?)
         .item(&item("note.new")?)
         .item(&item("split.choose")?)
@@ -6070,6 +6087,11 @@ fn build_tab_menu(
     let others = item(8, "Close Other Tabs", context.others)?;
     let below = item(9, "Close Tabs Below", context.below)?;
     let move_to = spaces::tab_menu_section(handle, &format!("tabmenu.{}", spaces::TAB_MENU_MOVE))?;
+    let reopen_in = containers::tab_menu_section(
+        handle,
+        &format!("tabmenu.{}", containers::TAB_MENU_REOPEN),
+        context.page,
+    )?;
     let mut items: Vec<&dyn tauri::menu::IsMenuItem<tauri::Wry>> = vec![
         &reload,
         &duplicate,
@@ -6082,6 +6104,9 @@ fn build_tab_menu(
     ];
     if let Some(move_to) = &move_to {
         items.push(move_to);
+    }
+    if let Some(reopen_in) = &reopen_in {
+        items.push(reopen_in);
     }
     if let Some(mute) = &mute {
         items.push(mute);
@@ -6905,6 +6930,7 @@ pub fn run() {
                 Projection::PanelOwner(owner) => overlay::update_context(&emit_handle, &owner),
                 Projection::Items(state) => {
                     spaces::follow(&emit_handle, &state);
+                    containers::follow(&emit_handle, &state);
                     page_assist::observe_items(&state);
                     emit_to_privileged(&emit_handle, MAIN_LABEL, EVENT_ITEMS, &state)
                 }

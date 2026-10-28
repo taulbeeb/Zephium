@@ -238,6 +238,7 @@ fn sample() -> SessionState {
     let space = SpaceId::from(2);
     let folder = ItemId::from(20);
     SessionState {
+        containers: Default::default(),
         profiles: vec![PersistedProfile {
             id: profile,
             name: "Personal".into(),
@@ -1036,6 +1037,7 @@ fn recently_closed_tabs_roundtrip_in_the_authoritative_bounded_snapshot() {
     let store = SqliteStore::in_memory().unwrap();
     let mut session = sample();
     session.recently_closed.push(PersistedClosedTab {
+        container: Default::default(),
         profile: session.profiles[0].id,
         space: session.spaces[0].id,
         url: "https://closed.example/path".into(),
@@ -3084,6 +3086,7 @@ fn maximum_valid_session_fits_snapshot_budget() {
         })
         .collect();
     let state = zephium_core::session::canonicalize(SessionState {
+        containers: Default::default(),
         profiles: vec![PersistedProfile {
             id: profile,
             name: "Personal".into(),
@@ -3523,6 +3526,7 @@ fn profile_deletion_rejects_a_hard_link_to_another_profile_database() {
     hub.record_visit(deleted, "https://deleted.example/", "Deleted");
     hub.record_visit(survivor, "https://survivor.example/", "Survivor");
     let filtered = SessionState {
+        containers: Default::default(),
         profiles: vec![PersistedProfile {
             id: survivor,
             name: "Work".into(),

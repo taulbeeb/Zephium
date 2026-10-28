@@ -580,6 +580,7 @@ mod qa_settings_recovery_tests {
         let profile = ProfileId::from(701);
         let space = SpaceId::from(702);
         SessionState {
+            containers: Default::default(),
             profiles: vec![PersistedProfile {
                 id: profile,
                 name: "QA".into(),
@@ -2698,6 +2699,7 @@ mod essentials_per_space_tests {
             kind,
         };
         SessionState {
+            containers: Default::default(),
             profiles: vec![
                 profile(PERSONAL, "Personal", ProfileKind::Default),
                 profile(WORK_PROFILE, "Work", ProfileKind::Named),

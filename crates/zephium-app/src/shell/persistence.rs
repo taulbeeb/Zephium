@@ -83,6 +83,7 @@ impl Shell {
             active,
             splits,
             &self.recently_closed,
+            &self.containers,
         );
         self.store.save_session(state);
     }

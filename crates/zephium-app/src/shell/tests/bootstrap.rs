@@ -193,6 +193,7 @@ fn qa_settings_tab_is_dropped_and_first_bootstrap_opens_a_usable_new_tab() {
     let settings = ItemId::from(9202);
     let store = Arc::new(FakeStore {
         saved: Mutex::new(Some(SessionState {
+            containers: Default::default(),
             profiles: vec![PersistedProfile {
                 id: profile,
                 name: "Personal".into(),
@@ -260,6 +261,7 @@ fn bootstrap_never_creates_views_for_foreign_focus_or_split_references() {
     };
     let store = Arc::new(FakeStore {
         saved: Mutex::new(Some(SessionState {
+            containers: Default::default(),
             profiles: vec![
                 PersistedProfile {
                     id: local_profile,

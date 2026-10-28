@@ -589,6 +589,16 @@ impl Engine for FakeEngine {
         *self.runtime_security_advisories.lock().unwrap()
     }
 
+    fn retain_container_data(
+        &self,
+        profile: ProfileId,
+        keep: Vec<zephium_core::ids::ContainerId>,
+        done: Box<dyn FnOnce(bool) + Send>,
+    ) {
+        let keep: Vec<String> = keep.iter().map(ToString::to_string).collect();
+        self.log(format!("retain containers {profile} [{}]", keep.join(",")));
+        done(true);
+    }
     fn create_view(&self, id: ItemId, partition: Partition, url: &str, _bounds: Rect) -> bool {
         if self
             .reject_create_dispatch
@@ -597,9 +607,10 @@ impl Engine for FakeEngine {
             return false;
         }
         let kind = match partition {
-            Partition::Default(_) => "default",
-            Partition::Persistent(_) => "persistent",
-            Partition::Ephemeral(_) => "ephemeral",
+            Partition::Default(_) => "default".to_owned(),
+            Partition::Persistent(_) => "persistent".to_owned(),
+            Partition::Ephemeral(_) => "ephemeral".to_owned(),
+            Partition::Container(_, container) => format!("container {container}"),
         };
         self.log(format!("create {id} {url} [{kind}]"));
         true
@@ -1999,6 +2010,7 @@ fn apply_projection(view: &mut ItemsState, p: Projection) {
 pub(super) fn setup_with(store: Arc<FakeStore>) -> (Shell, Arc<FakeEngine>, Screen) {
     let engine = Arc::new(FakeEngine::default());
     let screen: Screen = Arc::new(Mutex::new(ItemsState {
+        containers: Default::default(),
         projection_revision: String::new(),
         profile: None,
         spaces: Vec::new(),
@@ -2062,6 +2074,7 @@ type IconLog = Arc<Mutex<Vec<zephium_ipc::FaviconsView>>>;
 fn setup_with_icon_log(store: Arc<FakeStore>) -> (Shell, Arc<FakeEngine>, Screen, IconLog) {
     let engine = Arc::new(FakeEngine::default());
     let screen: Screen = Arc::new(Mutex::new(ItemsState {
+        containers: Default::default(),
         projection_revision: String::new(),
         profile: None,
         spaces: Vec::new(),
@@ -2095,6 +2108,7 @@ fn setup_with_async_chrome() -> (Shell, Arc<FakeEngine>, Arc<AsyncChrome>, Scree
     let engine = Arc::new(FakeEngine::default());
     let chrome = Arc::new(AsyncChrome::default());
     let screen: Screen = Arc::new(Mutex::new(ItemsState {
+        containers: Default::default(),
         projection_revision: String::new(),
         profile: None,
         spaces: Vec::new(),
@@ -2129,6 +2143,7 @@ pub(super) fn setup_with_operation_log_and_failure(
 ) -> (Shell, Arc<FakeEngine>, Screen, OperationLog) {
     let engine = Arc::new(FakeEngine::default());
     let screen: Screen = Arc::new(Mutex::new(ItemsState {
+        containers: Default::default(),
         projection_revision: String::new(),
         profile: None,
         spaces: Vec::new(),
@@ -2320,6 +2335,9 @@ mod search;
 mod shutdown;
 mod site_permissions;
 mod spaces;
+// Only macOS binds container stores.
+#[cfg(target_os = "macos")]
+mod containers;
 mod tabs;
 mod time;
 mod view_lifecycle;

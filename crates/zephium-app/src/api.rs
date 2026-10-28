@@ -251,6 +251,32 @@ pub enum SpaceCommand {
     MoveActive(zephium_core::ids::SpaceId),
 }
 
+/// Container mutations and container tabs from chrome and menus. The shell
+/// checks each against the focused persistent profile.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ContainerCommand {
+    Create {
+        name: String,
+        color: u8,
+        symbol: u8,
+    },
+    Update {
+        id: zephium_core::ids::ContainerId,
+        name: String,
+        color: u8,
+        symbol: u8,
+    },
+    /// Closes the container's tabs and erases its website data.
+    Delete(zephium_core::ids::ContainerId),
+    /// A new tab in the container, or the profile's own store with `None`.
+    OpenTab(Option<zephium_core::ids::ContainerId>),
+    /// The tab's page again in a new tab in another container.
+    ReopenIn {
+        tab: ItemId,
+        container: Option<zephium_core::ids::ContainerId>,
+    },
+}
+
 /// What the person chose for a page's request to open another application
 /// or a blocked new tab.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -458,6 +484,8 @@ pub enum Command {
     },
     /// Something done to the focused profile's spaces.
     Space(Box<SpaceCommand>),
+    /// Something done to the focused profile's containers.
+    Container(Box<ContainerCommand>),
     SetWindowSize(Size),
     /// Whether the OS can currently present the main window. Minimized
     /// windows hide native content views so the engine can lower their memory

@@ -676,6 +676,10 @@ fn validate_storage_postcondition(
                 );
             }
         }
+        // Linux binds no container stores; such a view is never valid here.
+        Partition::Container(..) => {
+            return Err("WebKitGTK has no container website data store".into());
+        }
         Partition::Default(_) | Partition::Persistent(_) => {
             if manager_is_ephemeral {
                 return Err("durable view received an ephemeral WebKitGTK data manager".into());

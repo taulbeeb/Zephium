@@ -203,6 +203,7 @@ impl Shell {
             window.and_then(|window| window.active),
             window.and_then(|window| window.splits.as_ref()),
             &self.recently_closed,
+            &self.containers,
         );
         if !filtered
             .profiles
@@ -228,6 +229,16 @@ impl Shell {
             let (Placement::Favorites { space } | Placement::Space { space, .. }) = item.placement;
             !removed_spaces.contains(&space)
         });
+        filtered
+            .containers
+            .containers
+            .retain(|container| container.profile != profile);
+        let kept_items: std::collections::HashSet<ItemId> =
+            filtered.items.iter().map(|item| item.id).collect();
+        filtered
+            .containers
+            .tabs
+            .retain(|tab| kept_items.contains(&tab.item));
 
         (session::canonicalize(filtered.clone()) == filtered).then_some(filtered)
     }
@@ -290,6 +301,9 @@ impl Shell {
         let removed_spaces = self.spaces.remove_for_profile(profile);
         let _native_erasure_owns_close = self.items.remove_for_profile(&removed_spaces);
         self.profiles.remove(profile);
+        // The engine's profile erasure removes every container store the
+        // profile owns by enumeration.
+        self.containers.remove_profile(profile);
         self.forget_profile_roster(profile);
 
         self.residency

@@ -1380,6 +1380,7 @@ fn keyboard_selection_walks_the_sidebar_from_favorites_through_pinned_folders() 
     };
     let store = Arc::new(FakeStore {
         saved: Mutex::new(Some(SessionState {
+            containers: Default::default(),
             profiles: vec![PersistedProfile {
                 id: profile,
                 name: "Personal".into(),
@@ -1480,6 +1481,7 @@ fn find_follows_the_page_in_front_and_answers_only_for_it() {
     let engine = Arc::new(FakeEngine::default());
     let results: Arc<Mutex<Vec<zephium_ipc::FindResultView>>> = Arc::default();
     let screen: Screen = Arc::new(Mutex::new(ItemsState {
+        containers: Default::default(),
         projection_revision: String::new(),
         profile: None,
         spaces: Vec::new(),

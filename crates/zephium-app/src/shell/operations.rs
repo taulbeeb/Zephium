@@ -60,6 +60,7 @@ impl Shell {
             Command::LeaveSplit(id) => self.operation_leave_split(id),
             Command::TabAction { id, action } => self.operation_tab_action(id, action),
             Command::Space(command) => self.operation_space(*command),
+            Command::Container(command) => self.operation_container(*command),
             Command::DropTab { id, x, y } => self.operation_drop_tab(id, x, y),
             Command::DividerRelease { x, y } => self.operation_divider_release(x.zip(y)),
             Command::Run(id) => self.operation_run_command(&id),
@@ -199,6 +200,11 @@ impl Shell {
         if let Some(at) = roots.iter().position(|root| *root == id) {
             let before = roots[at + 1..].iter().copied().find(|root| *root != copy);
             self.items.move_tab_to_root(copy, today, before);
+        }
+        // The copy keeps the original's sign-ins.
+        let container = self.items.tab(id).and_then(|tab| tab.container);
+        if !self.items.assign_container(copy, container) {
+            return mutation_result(self.commit(effects));
         }
         effects.extend(self.items.navigate(copy, &url));
         mutation_result(self.commit(effects))

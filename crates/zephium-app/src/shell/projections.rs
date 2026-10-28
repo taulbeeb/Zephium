@@ -332,6 +332,7 @@ impl Shell {
                 .filter(|id| sidebar.tab_ids.contains(id))
                 .map(|id| id.to_string()),
             split_group,
+            containers: self.containers_view(profile.id),
         })
     }
 
@@ -777,5 +778,6 @@ fn tab_view(
         ),
         zoom: None,
         audio: None,
+        container: tab.container.map(|container| container.to_string()),
     }
 }

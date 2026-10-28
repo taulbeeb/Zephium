@@ -434,6 +434,13 @@ export const commands = {
 	spacesMoveTab: (tab: string, space: string) => __TAURI_INVOKE<OperationAdmission>("spaces_move_tab", { tab, space }),
 	/**  The switcher at rail width, where the column has no room for its own. */
 	spacesMenuPopup: (x: number | null, y: number | null) => __TAURI_INVOKE<boolean>("spaces_menu_popup", { x, y }),
+	containersCreate: (name: string, color: number, symbol: number) => __TAURI_INVOKE<OperationAdmission>("containers_create", { name, color, symbol }),
+	containersUpdate: (container: string, name: string, color: number, symbol: number) => __TAURI_INVOKE<OperationAdmission>("containers_update", { container, name, color, symbol }),
+	containersDelete: (container: string) => __TAURI_INVOKE<OperationAdmission>("containers_delete", { container }),
+	/**  A new tab in the container, or in the profile's own store without one. */
+	containersOpenTab: (container: string | null) => __TAURI_INVOKE<OperationAdmission>("containers_open_tab", { container }),
+	/**  The tab's page again in a new tab in another container. */
+	containersReopenTab: (tab: string, container: string | null) => __TAURI_INVOKE<OperationAdmission>("containers_reopen_tab", { tab, container }),
 	operationStatus: (operationId: string) => __TAURI_INVOKE<OperationStatus>("operation_status", { operationId }),
 	operationsReconcile: () => __TAURI_INVOKE<OperationDisposition[]>("operations_reconcile"),
 	operationAcknowledge: (operationId: string) => __TAURI_INVOKE<boolean>("operation_acknowledge", { operationId }),
@@ -1269,6 +1276,18 @@ export type ClosedTabView = {
 	icon: IconRef | null,
 };
 
+/**  A separate cookie jar of the focused profile. */
+export type ContainerView = {
+	id: string,
+	name: string,
+	/**  An index into the frame's curated container colours. */
+	color: number,
+	/**  An index into the frame's curated container symbols. */
+	symbol: number,
+	/**  Open and pinned tabs in it, which deleting it closes. */
+	tabs: number,
+};
+
 export type DefaultBrowserStatus = {
 	is_default: boolean,
 	/**
@@ -1702,6 +1721,8 @@ export type ItemsState = {
 	tabs: TabView[],
 	active: string | null,
 	split_group: SplitGroupView | null,
+	/**  The focused profile's containers, in creation order. */
+	containers: ContainerView[],
 };
 
 /**  The keymap changed; read it again. */
@@ -3260,6 +3281,11 @@ export type TabView = {
 	zoom?: number | null,
 	/**  Present while the page plays sound, and for as long as it is muted. */
 	audio?: TabAudioView | null,
+	/**
+	 *  The container whose store the tab's pages use; absent for the
+	 *  profile's own.
+	 */
+	container?: string | null,
 };
 
 /**

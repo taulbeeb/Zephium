@@ -544,6 +544,7 @@ impl Shell {
             .flatten()
             .and_then(|at| u32::try_from(at).ok());
         Some(zephium_core::session::PersistedClosedTab {
+            container: tab.container,
             profile,
             space,
             url: tab.url.as_ref()?.to_string(),
@@ -595,11 +596,21 @@ impl Shell {
             space,
             section: SpaceSection::Today,
         };
+        // A tab closed in a container comes back in it, or not at all.
+        if entry
+            .container
+            .is_some_and(|container| !self.containers.belongs_to(container, profile))
+        {
+            self.recently_closed.remove(position);
+            return None;
+        }
         let id = (0..8).find_map(|_| {
             let candidate = ItemId::generate();
             self.items.insert_tab(candidate, today).then_some(candidate)
         })?;
-        if !self.items.set_committed_url_str(id, &entry.url) {
+        if !self.items.assign_container(id, entry.container)
+            || !self.items.set_committed_url_str(id, &entry.url)
+        {
             let _ = self.items.remove(id);
             return None;
         }
@@ -765,7 +776,11 @@ impl Shell {
         ) {
             return;
         }
-        if !self.items.adopt_native_view(child) {
+        // WebKit built the child from its opener's configuration, so it is
+        // already in the opener's store; the item records that container so
+        // a rebuilt view lands there again.
+        let container = self.items.tab(source).and_then(|tab| tab.container);
+        if !self.items.assign_container(child, container) || !self.items.adopt_native_view(child) {
             let _ = self.items.remove(child);
             return;
         }
@@ -873,6 +888,12 @@ impl Shell {
                 section: SpaceSection::Today,
             },
         ) {
+            return;
+        }
+        // A page's new tab keeps the page's sign-ins.
+        let container = self.items.tab(source).and_then(|tab| tab.container);
+        if !self.items.assign_container(id, container) {
+            let _ = self.items.remove(id);
             return;
         }
         let mut fx = self.focus_tab(id);

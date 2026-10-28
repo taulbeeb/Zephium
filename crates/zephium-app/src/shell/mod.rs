@@ -177,6 +177,7 @@ impl AgentLifecycleOwner {
 }
 
 mod browser_pages;
+mod containers;
 mod kept_sites;
 mod spaces;
 mod work_pane;
@@ -221,6 +222,7 @@ pub struct Shell {
     #[cfg(feature = "work-execution")]
     retained_graveyard: Vec<crate::work_resources::product::ProductWork>,
     profiles: Profiles,
+    containers: zephium_core::containers::Containers,
     spaces: Spaces,
     items: Items,
     recently_closed: Vec<zephium_core::session::PersistedClosedTab>,
@@ -465,6 +467,7 @@ impl Shell {
         } = ports;
         Self {
             profiles: Profiles::default(),
+            containers: Default::default(),
             spaces: Spaces::default(),
             items: Items::default(),
             recently_closed: Vec::new(),
@@ -896,6 +899,9 @@ impl Shell {
             }
             Command::Space(command) => {
                 let _ = self.operation_space(*command);
+            }
+            Command::Container(command) => {
+                let _ = self.operation_container(*command);
             }
             Command::SetWindowSize(size) => match self.windows.focused_mut() {
                 Some(win) => {
