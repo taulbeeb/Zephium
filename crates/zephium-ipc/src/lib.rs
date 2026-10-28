@@ -610,6 +610,7 @@ pub struct ItemsState {
     pub split_group: Option<SplitGroupView>,
     /// The focused profile's containers, in creation order.
     #[serde(default)]
+    #[specta(optional)]
     pub containers: Vec<ContainerView>,
 }
 

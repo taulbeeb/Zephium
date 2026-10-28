@@ -9,6 +9,7 @@
   import Icon from "$shared/ui/Icon";
   import ProfileAvatar, { AVATAR_COLORS } from "$shared/ui/ProfileAvatar";
   import ProfileSheet from "../profiles/ProfileSheet.svelte";
+  import ContainersList from "../profiles/ContainersList.svelte";
 
   onMount(() => {
     void profiles.retain();
@@ -96,6 +97,8 @@
   </ul>
   <p class="note">{m.profiles_list_note()}</p>
 </section>
+
+<ContainersList />
 
 <ProfileSheet
   bind:open={sheetOpen}

@@ -1722,7 +1722,7 @@ export type ItemsState = {
 	active: string | null,
 	split_group: SplitGroupView | null,
 	/**  The focused profile's containers, in creation order. */
-	containers: ContainerView[],
+	containers?: ContainerView[],
 };
 
 /**  The keymap changed; read it again. */

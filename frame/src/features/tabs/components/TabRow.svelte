@@ -16,6 +16,7 @@
   import AudioControl from "$shared/ui/AudioControl";
   import { tabs } from "$domain/tabs";
   import { closeOnMiddleClick } from "../lib/middle-click";
+  import { containerHue } from "$shared/lib/container-hue";
 
   let {
     cascade = 0,
@@ -61,6 +62,9 @@
   // supplies no icon, and the row should say which.
   let fallback = $derived(tabFallbackIcon(tab.content));
   let indent = $derived(grouped ? 8 : 8 + Math.min(depth, 8) * 13);
+  // A tab in a container carries its colour, so two sign-ins to the same
+  // site are told apart at a glance.
+  let container = $derived(tabs.containerOf(tab));
 </script>
 
 <li
@@ -74,14 +78,19 @@
   data-selected={active}
   data-split-candidate={splitCandidate}
   data-cascade={cascade < CASCADE_ROWS || undefined}
+  data-container={container ? "" : undefined}
   style:--cascade={cascade}
+  style:--container-hue={container ? containerHue(container.color) : undefined}
 >
   <button
     type="button"
     class="tab-open"
     style:padding-inline-start={`${indent}px`}
     aria-current={active ? "page" : undefined}
-    aria-label={tab.title || m.untitled_tab()}
+    aria-label={container
+      ? m.tab_in_container({ title: tab.title || m.untitled_tab(), container: container.name })
+      : tab.title || m.untitled_tab()}
+    title={container ? container.name : undefined}
     oncontextmenu={(event) => onContextMenu(event, tab)}
     onpointerdown={(event) => onPointerDown(event, tab)}
     onpointermove={onPointerMove}
@@ -156,6 +165,18 @@
 
   .browse-tab-grouped {
     border-radius: 0;
+  }
+
+  /* A container's colour runs down the row's leading edge. */
+  .browse-tab[data-container]::before {
+    position: absolute;
+    inset-block: 7px;
+    inset-inline-start: 2px;
+    inline-size: 3px;
+    border-radius: 2px;
+    background: var(--container-hue);
+    content: "";
+    pointer-events: none;
   }
 
   .browse-tab:not([data-selected="true"]):hover {
@@ -272,6 +293,10 @@
   @media (forced-colors: active) {
     .tab-label {
       mask-image: none;
+    }
+
+    .browse-tab[data-container]::before {
+      background: CanvasText;
     }
   }
 </style>

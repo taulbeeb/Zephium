@@ -1,7 +1,13 @@
 import { listenAll } from "$shared/lib/lifecycle";
 import { forgetDrafts } from "$shared/lib/drafts";
 import { flushSync } from "svelte";
-import type { ItemsState, SpaceLookInputV1, TabMenuContext, TabView } from "$shared/ipc/bindings";
+import type {
+  ContainerView,
+  ItemsState,
+  SpaceLookInputV1,
+  TabMenuContext,
+  TabView,
+} from "$shared/ipc/bindings";
 import { settle } from "$domain/operations";
 import { commands } from "$shared/ipc/bindings";
 import { events } from "$shared/ipc/native-events";
@@ -20,6 +26,11 @@ export const activeSpace = () => state.spaces.find((space) => space.id === state
 export const sidebarNodes = () => state.nodes;
 export const activeTab = (): TabView | undefined =>
   state.tabs.find((tab) => tab.id === state.active);
+/** The focused profile's containers, in creation order. */
+export const containers = (): ContainerView[] => state.containers ?? [];
+/** The container a tab's pages use, if any. */
+export const containerOf = (tab: TabView): ContainerView | undefined =>
+  tab.container ? containers().find((container) => container.id === tab.container) : undefined;
 
 type Unlisten = () => void;
 
@@ -244,3 +255,12 @@ export const reorderSpace = (id: string, before: string | null) =>
   settle(commands.spacesReorder(id, before));
 export const moveTabToSpace = (tab: string, space: string) =>
   settle(commands.spacesMoveTab(tab, space));
+
+/** Container intents settle on native's answer; the projection carries the result. */
+export const createContainer = (name: string, color: number, symbol: number) =>
+  settle(commands.containersCreate(name, color, symbol));
+export const updateContainer = (id: string, name: string, color: number, symbol: number) =>
+  settle(commands.containersUpdate(id, name, color, symbol));
+export const deleteContainer = (id: string) => settle(commands.containersDelete(id));
+/** A new tab in the container, or in the profile's own store with null. */
+export const openContainerTab = (id: string | null) => settle(commands.containersOpenTab(id));

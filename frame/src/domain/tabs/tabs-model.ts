@@ -17,6 +17,7 @@ export function initialItemsState(): ItemsState {
     tabs: [],
     active: null,
     split_group: null,
+    containers: [],
   };
 }
 
