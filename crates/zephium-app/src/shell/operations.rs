@@ -202,7 +202,7 @@ impl Shell {
             self.items.move_tab_to_root(copy, today, before);
         }
         // The copy keeps the original's sign-ins.
-        let container = self.items.tab(id).and_then(|tab| tab.container);
+        let container = self.items.tab(id).and_then(|tab| tab.container());
         if !self.items.assign_container(copy, container) {
             return mutation_result(self.commit(effects));
         }

@@ -796,7 +796,7 @@ impl Items {
     ) -> bool {
         match self.tab_mut(id) {
             Some(tab) if tab.content == TabContent::Web && !tab.view => {
-                tab.container = container;
+                tab.container = container.map(Box::new);
                 true
             }
             _ => false,
@@ -809,7 +809,7 @@ impl Items {
             .iter()
             .filter(|(_, item)| {
                 item.tab()
-                    .is_some_and(|tab| tab.container == Some(container))
+                    .is_some_and(|tab| tab.container() == Some(container))
             })
             .map(|(id, _)| *id)
             .collect()
@@ -862,7 +862,7 @@ mod tests {
             !items.assign_container(tab, None),
             "a live view keeps its store"
         );
-        assert_eq!(items.tab(tab).unwrap().container, Some(container));
+        assert_eq!(items.tab(tab).unwrap().container(), Some(container));
         assert_eq!(items.container_tabs(container), vec![tab]);
         assert!(items.insert(Item {
             id: folder,

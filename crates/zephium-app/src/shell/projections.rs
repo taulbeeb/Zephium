@@ -778,6 +778,6 @@ fn tab_view(
         ),
         zoom: None,
         audio: None,
-        container: tab.container.map(|container| container.to_string()),
+        container: tab.container().map(|container| container.to_string()),
     }
 }

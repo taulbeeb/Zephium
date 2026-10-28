@@ -218,7 +218,7 @@ pub fn snapshot_with_recently_closed(
         .items
         .iter()
         .filter_map(|item| {
-            let container = items.tab(item.id)?.container?;
+            let container = items.tab(item.id)?.container()?;
             (matches!(item.kind, PersistedKind::Tab { .. }) && persisted_container(container))
                 .then_some(PersistedTabContainer {
                     item: item.id,
@@ -440,7 +440,7 @@ pub fn restore(state: SessionState) -> Restored {
                 };
                 tab.last_active_ms =
                     last_active_ms.filter(|ms| (1_000..=MAX_EXACT_MS).contains(ms));
-                tab.container = container;
+                tab.container = container.map(Box::new);
                 ItemKind::Tab(tab)
             }
             PersistedKind::BrowserTab { page } => {
@@ -1096,11 +1096,11 @@ mod tests {
         let state = container_state();
         let restored = restore(state.clone());
         assert_eq!(
-            restored.items.tab(ItemId::from(10)).unwrap().container,
+            restored.items.tab(ItemId::from(10)).unwrap().container(),
             Some(ContainerId::from(50))
         );
         assert_eq!(
-            restored.items.tab(ItemId::from(11)).unwrap().container,
+            restored.items.tab(ItemId::from(11)).unwrap().container(),
             None
         );
         assert_eq!(restored.containers.iter().count(), 2);

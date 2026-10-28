@@ -74,11 +74,11 @@ fn duplicates_and_pages_opened_from_a_container_tab_stay_in_it() {
     });
     let copy = active_id(&screen);
     assert_ne!(copy, tab);
-    assert_eq!(shell.items.tab(copy).unwrap().container, Some(work));
+    assert_eq!(shell.items.tab(copy).unwrap().container(), Some(work));
 
     shell.open_linked_tab(tab, "https://docs.example/");
     let linked = active_id(&screen);
-    assert_eq!(shell.items.tab(linked).unwrap().container, Some(work));
+    assert_eq!(shell.items.tab(linked).unwrap().container(), Some(work));
     assert!(engine
         .calls()
         .iter()
@@ -111,8 +111,8 @@ fn reopening_in_another_container_makes_a_new_tab_and_keeps_the_original() {
     assert_eq!(moved.outcome, OperationOutcome::Applied);
     let copy = active_id(&screen);
     assert_ne!(copy, tab);
-    assert_eq!(shell.items.tab(copy).unwrap().container, Some(home));
-    assert_eq!(shell.items.tab(tab).unwrap().container, Some(work));
+    assert_eq!(shell.items.tab(copy).unwrap().container(), Some(home));
+    assert_eq!(shell.items.tab(tab).unwrap().container(), Some(work));
     let plain = container_op(
         &mut shell,
         ContainerCommand::ReopenIn {
@@ -121,7 +121,10 @@ fn reopening_in_another_container_makes_a_new_tab_and_keeps_the_original() {
         },
     );
     assert_eq!(plain.outcome, OperationOutcome::Applied);
-    assert_eq!(shell.items.tab(active_id(&screen)).unwrap().container, None);
+    assert_eq!(
+        shell.items.tab(active_id(&screen)).unwrap().container(),
+        None
+    );
 }
 
 #[test]
@@ -213,7 +216,7 @@ fn containers_and_their_tabs_survive_a_restart_and_closed_tabs_reopen_in_them() 
     let (mut shell, engine, screen) = setup_with(restarted);
     shell.handle(Command::Bootstrap);
     let profile = shell.windows.focused().unwrap().profile;
-    assert_eq!(shell.items.tab(tab).unwrap().container, Some(work));
+    assert_eq!(shell.items.tab(tab).unwrap().container(), Some(work));
     assert_eq!(last(&screen).containers[0].name, "Work");
     // The launch sweep keeps the stores of containers that still exist.
     assert!(engine
@@ -223,5 +226,5 @@ fn containers_and_their_tabs_survive_a_restart_and_closed_tabs_reopen_in_them() 
     let (reopened, _) = shell
         .restore_recently_closed_tab(profile, None)
         .expect("the closed container tab comes back");
-    assert_eq!(shell.items.tab(reopened).unwrap().container, Some(work));
+    assert_eq!(shell.items.tab(reopened).unwrap().container(), Some(work));
 }

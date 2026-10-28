@@ -141,7 +141,8 @@ pub struct TabState {
     /// The container whose store the tab's page uses; none is the profile's
     /// own. Set before the tab's first view and never changed while one
     /// lives, so a native view stays bound to one store for its whole life.
-    pub container: Option<ContainerId>,
+    /// Boxed because few tabs have one; read it with [`TabState::container`].
+    pub(crate) container: Option<Box<ContainerId>>,
     // Distinct from `url`: a restored/hibernated tab has a url but no live view.
     pub(crate) view: bool,
 }
@@ -209,6 +210,11 @@ impl TabState {
 
     pub fn has_view(&self) -> bool {
         self.view
+    }
+
+    /// The container whose store the tab's page uses; none is the profile's.
+    pub fn container(&self) -> Option<ContainerId> {
+        self.container.as_deref().copied()
     }
 
     /// Whether the native view is laid out: it lives and no failure covers

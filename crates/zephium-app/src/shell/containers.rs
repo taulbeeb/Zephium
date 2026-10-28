@@ -159,7 +159,7 @@ impl Shell {
         else {
             return operation_result(OperationOutcome::NoOp, OperationReason::InvalidInput);
         };
-        if self.items.tab(tab).and_then(|state| state.container) == container {
+        if self.items.tab(tab).and_then(|state| state.container()) == container {
             return operation_result(OperationOutcome::NoOp, OperationReason::StateUnchanged);
         }
         let Some((copy, mut effects)) = self.open_tab_with_id() else {

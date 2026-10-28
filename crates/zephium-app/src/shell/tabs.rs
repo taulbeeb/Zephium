@@ -544,7 +544,7 @@ impl Shell {
             .flatten()
             .and_then(|at| u32::try_from(at).ok());
         Some(zephium_core::session::PersistedClosedTab {
-            container: tab.container,
+            container: tab.container(),
             profile,
             space,
             url: tab.url.as_ref()?.to_string(),
@@ -779,7 +779,7 @@ impl Shell {
         // WebKit built the child from its opener's configuration, so it is
         // already in the opener's store; the item records that container so
         // a rebuilt view lands there again.
-        let container = self.items.tab(source).and_then(|tab| tab.container);
+        let container = self.items.tab(source).and_then(|tab| tab.container());
         if !self.items.assign_container(child, container) || !self.items.adopt_native_view(child) {
             let _ = self.items.remove(child);
             return;
@@ -891,7 +891,7 @@ impl Shell {
             return;
         }
         // A page's new tab keeps the page's sign-ins.
-        let container = self.items.tab(source).and_then(|tab| tab.container);
+        let container = self.items.tab(source).and_then(|tab| tab.container());
         if !self.items.assign_container(id, container) {
             let _ = self.items.remove(id);
             return;

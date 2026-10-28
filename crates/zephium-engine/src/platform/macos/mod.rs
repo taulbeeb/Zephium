@@ -716,9 +716,11 @@ pub(crate) fn retain_container_stores(
     }
 }
 
+type SweepDone = Box<dyn FnOnce(bool) + Send>;
+
 /// Answers a container sweep exactly once, from whichever callback ends it.
 #[derive(Clone)]
-struct ContainerSweep(Arc<std::sync::Mutex<Option<Box<dyn FnOnce(bool) + Send>>>>);
+struct ContainerSweep(Arc<std::sync::Mutex<Option<SweepDone>>>);
 
 impl ContainerSweep {
     fn finish(&self, ok: bool) {

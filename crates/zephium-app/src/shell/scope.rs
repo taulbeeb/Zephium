@@ -73,7 +73,7 @@ impl Shell {
         // A container tab only ever uses its container's store. Even a stale
         // container keeps its own (then empty) store, never the profile's;
         // the next sweep removes it.
-        if let Some(container) = self.items.tab(id).and_then(|tab| tab.container) {
+        if let Some(container) = self.items.tab(id).and_then(|tab| tab.container()) {
             if kind != Some(ProfileKind::Incognito) {
                 return Partition::Container(profile, container);
             }
