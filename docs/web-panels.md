@@ -93,12 +93,13 @@ Multi-Account Containers.
    toolbar for back, forward, reload, zoom and close.
 5. **Tests**, then CI on macOS and Windows, then trying it on your Mac.
 
-## Open decisions
+## Decisions
 
-- **Scope:** panels shared by every space of a profile (Zen Sidebar's
-  behaviour), or each space keeping its own.
-- **Where the icons live:** a strip at the window's right edge (the Zen
-  Sidebar and Vivaldi shape), or a row in Zephium's own left sidebar. The
-  right edge needs the chrome to draw a second strip. The left sidebar needs
-  no layout change.
-- **Overlay mode:** needed in phase 1, or fine in phase 3.
+- **Scope:** panels are shared by every space of a profile, as in Zen
+  Sidebar. The profile's first space anchors them.
+- **Icons:** a strip at the window's right edge, beside the open panel. The
+  chrome is one webview anchored at the window's left, so phase 1 gives it a
+  second, right-hand region. The content region shrinks by the strip's width,
+  and the page views never cover it.
+- **Overlay:** phase 1 docks the panel and narrows the page. Slide-over waits
+  for phase 3.
