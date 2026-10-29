@@ -23,6 +23,7 @@ controls product intent.
 - [Charts](design/charts.md): the chart kit used by Work results and Activity.
 - [File workflows](file-workflows-windows-qa.md): upload and download ownership, recovery, and Windows acceptance checks.
 - [Containers](containers.md): separate cookie jars inside a profile, and what this fork has built of them.
+- [Web panels](web-panels.md): the plan for sites docked beside the page.
 
 ## Work and AI
 
