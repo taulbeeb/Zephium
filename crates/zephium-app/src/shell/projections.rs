@@ -209,6 +209,7 @@ impl Shell {
                 && offered.active == snapshot.active
                 && offered.split_group == snapshot.split_group
                 && offered.containers == snapshot.containers
+                && offered.web_panels == snapshot.web_panels
         });
         if !same {
             *last = Some(snapshot.clone());
@@ -319,6 +320,9 @@ impl Shell {
             })
         });
         self.record_tab_projection_revisions(&sidebar.tabs);
+        let web_panels = self.web_panels_view(profile.id);
+        let panel_tabs: Vec<TabView> = web_panels.iter().map(|panel| panel.tab.clone()).collect();
+        self.record_tab_projection_revisions(&panel_tabs);
         if let Ok(mut views) = self.presentation.last_tab_views.try_borrow_mut() {
             views.retain(|id, _| self.items.tab(*id).is_some());
         }
@@ -334,6 +338,7 @@ impl Shell {
                 .map(|id| id.to_string()),
             split_group,
             containers: self.containers_view(profile.id),
+            web_panels,
         })
     }
 
@@ -439,7 +444,12 @@ impl Shell {
         }
     }
 
-    fn generic_tab_view(&self, id: ItemId, tab: &TabState, profile: Option<ProfileId>) -> TabView {
+    pub(super) fn generic_tab_view(
+        &self,
+        id: ItemId,
+        tab: &TabState,
+        profile: Option<ProfileId>,
+    ) -> TabView {
         let mut view = self.presentation_tab_view(id, tab, self.tab_icon(id, tab, profile));
         if self
             .presentation

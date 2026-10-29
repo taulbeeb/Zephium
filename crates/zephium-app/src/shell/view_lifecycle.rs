@@ -419,6 +419,8 @@ impl Shell {
                 .visible_tree()
                 .map(|t| t.tabs().into_iter().collect())
                 .unwrap_or_default();
+            // The open panel is on screen beside the page.
+            shown.extend(self.shown_panel());
             // A failure in front of the page is what the person is looking
             // at; its view must not go to sleep under it.
             shown.extend(
@@ -662,6 +664,8 @@ impl Shell {
                 }
             }
         } else if let Some(active) = window.active {
+            // The open panel stays awake beside whatever tab is in front.
+            protected.extend(self.shown_panel());
             if self.item_in_scope(active, window.profile, window.space) {
                 protected.insert(active);
                 if let Some(tree) = &window.splits {

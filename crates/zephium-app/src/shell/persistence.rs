@@ -84,6 +84,7 @@ impl Shell {
             splits,
             &self.recently_closed,
             &self.containers,
+            &self.panels,
         );
         self.store.save_session(state);
     }

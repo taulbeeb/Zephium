@@ -282,6 +282,54 @@ pub enum ContainerCommand {
     },
 }
 
+/// Web panel mutations from chrome, menus and keys. The shell checks each
+/// against the focused persistent profile.
+#[derive(Clone, Debug, PartialEq)]
+pub enum PanelCommand {
+    /// A new panel for an address, opened beside the page.
+    Add {
+        url: String,
+        container: Option<zephium_core::ids::ContainerId>,
+    },
+    /// The tab's page as a new panel, in the tab's container. The tab stays.
+    AddTab(ItemId),
+    Remove(ItemId),
+    /// Before another panel, or last with `None`.
+    Move {
+        id: ItemId,
+        before: Option<ItemId>,
+    },
+    /// Shows a panel beside the page, or closes the open one with `None`.
+    Open(Option<ItemId>),
+    /// Closes the open panel, or opens the one open last.
+    Toggle,
+    Resize {
+        id: ItemId,
+        width: f64,
+    },
+    /// Moves the panel to another container's store, rebuilding its page.
+    SetContainer {
+        id: ItemId,
+        container: Option<zephium_core::ids::ContainerId>,
+    },
+    /// Goes to an address in the panel.
+    Load {
+        id: ItemId,
+        input: String,
+    },
+    Navigate {
+        id: ItemId,
+        action: PanelNavigation,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PanelNavigation {
+    Back,
+    Forward,
+    Reload,
+}
+
 /// What the person chose for a page's request to open another application
 /// or a blocked new tab.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -491,6 +539,8 @@ pub enum Command {
     Space(Box<SpaceCommand>),
     /// Something done to the focused profile's containers.
     Container(Box<ContainerCommand>),
+    /// Something done to the focused profile's web panels.
+    Panel(Box<PanelCommand>),
     SetWindowSize(Size),
     /// Whether the OS can currently present the main window. Minimized
     /// windows hide native content views so the engine can lower their memory

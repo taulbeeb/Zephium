@@ -1299,6 +1299,7 @@ fn tracked_operation_command(command: &Command) -> bool {
             | Command::TabAction { .. }
             | Command::Space(_)
             | Command::Container(_)
+            | Command::Panel(_)
             | Command::DropTab { .. }
             | Command::DividerRelease { .. }
             | Command::Run(_)

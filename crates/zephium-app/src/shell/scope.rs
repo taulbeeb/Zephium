@@ -10,13 +10,32 @@ impl Shell {
         !self.profile_deletion_quarantines(profile)
             && self.profile_of_item(id) == Some(profile)
             && self.items.tab(id).is_some()
+            && !self.is_panel(id)
             && self.work_pane.as_ref().is_none_or(|pane| pane.tab != id)
     }
 
     pub(super) fn profile_of_item(&self, id: ItemId) -> Option<ProfileId> {
-        let (Placement::Favorites { space } | Placement::Space { space, .. }) =
-            self.items.get(id)?.placement;
-        self.spaces.get(space).map(|s| s.profile)
+        match self.items.get(id)?.placement {
+            Placement::Favorites { space } | Placement::Space { space, .. } => {
+                self.spaces.get(space).map(|s| s.profile)
+            }
+            Placement::Panel { profile } => Some(profile),
+        }
+    }
+
+    /// Whether `id` is a web panel rather than a tab of a space.
+    pub(super) fn is_panel(&self, id: ItemId) -> bool {
+        self.items
+            .get(id)
+            .is_some_and(|item| matches!(item.placement, Placement::Panel { .. }))
+    }
+
+    /// A panel of `profile`, which UI-directed panel commands must name.
+    pub(super) fn panel_in_scope(&self, id: ItemId, profile: ProfileId) -> bool {
+        !self.profile_deletion_quarantines(profile)
+            && self.items.get(id).is_some_and(|item| {
+                item.placement == Placement::Panel { profile } && item.tab().is_some()
+            })
     }
 
     /// A space is an authorization boundary for UI-directed item IDs: its
@@ -35,11 +54,14 @@ impl Shell {
         let Some(item) = self.items.get(id).filter(|item| item.tab().is_some()) else {
             return false;
         };
-        let (Placement::Favorites { space: item_space }
-        | Placement::Space {
-            space: item_space, ..
-        }) = item.placement;
-        item_space == space
+        match item.placement {
+            Placement::Favorites { space: item_space }
+            | Placement::Space {
+                space: item_space, ..
+            } => item_space == space,
+            // Panels have their own commands and scope; no tab command names one.
+            Placement::Panel { .. } => false,
+        }
     }
 
     pub(super) fn item_in_focused_scope(&self, id: ItemId) -> bool {

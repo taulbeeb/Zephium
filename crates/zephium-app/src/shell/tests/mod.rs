@@ -2016,6 +2016,7 @@ fn apply_projection(view: &mut ItemsState, p: Projection) {
 pub(super) fn setup_with(store: Arc<FakeStore>) -> (Shell, Arc<FakeEngine>, Screen) {
     let engine = Arc::new(FakeEngine::default());
     let screen: Screen = Arc::new(Mutex::new(ItemsState {
+        web_panels: Default::default(),
         containers: Default::default(),
         projection_revision: String::new(),
         profile: None,
@@ -2080,6 +2081,7 @@ type IconLog = Arc<Mutex<Vec<zephium_ipc::FaviconsView>>>;
 fn setup_with_icon_log(store: Arc<FakeStore>) -> (Shell, Arc<FakeEngine>, Screen, IconLog) {
     let engine = Arc::new(FakeEngine::default());
     let screen: Screen = Arc::new(Mutex::new(ItemsState {
+        web_panels: Default::default(),
         containers: Default::default(),
         projection_revision: String::new(),
         profile: None,
@@ -2114,6 +2116,7 @@ fn setup_with_async_chrome() -> (Shell, Arc<FakeEngine>, Arc<AsyncChrome>, Scree
     let engine = Arc::new(FakeEngine::default());
     let chrome = Arc::new(AsyncChrome::default());
     let screen: Screen = Arc::new(Mutex::new(ItemsState {
+        web_panels: Default::default(),
         containers: Default::default(),
         projection_revision: String::new(),
         profile: None,
@@ -2149,6 +2152,7 @@ pub(super) fn setup_with_operation_log_and_failure(
 ) -> (Shell, Arc<FakeEngine>, Screen, OperationLog) {
     let engine = Arc::new(FakeEngine::default());
     let screen: Screen = Arc::new(Mutex::new(ItemsState {
+        web_panels: Default::default(),
         containers: Default::default(),
         projection_revision: String::new(),
         profile: None,
@@ -2332,6 +2336,7 @@ mod onboarding;
 mod operations;
 mod page_permissions;
 mod page_source;
+mod panels;
 mod persistence;
 mod presentation;
 mod private;

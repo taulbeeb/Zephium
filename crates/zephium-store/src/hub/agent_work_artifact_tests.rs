@@ -101,6 +101,7 @@ fn register(hub: &mut Hub) {
         session::{PersistedProfile, PersistedSpace, SessionState},
     };
     hub.save(&SessionState {
+        panels: Default::default(),
         containers: Default::default(),
         profiles: vec![PersistedProfile {
             id: 1_u128.into(),

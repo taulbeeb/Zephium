@@ -767,7 +767,8 @@ impl Shell {
         else {
             return;
         };
-        if !self.item_in_scope(source, profile, space)
+        // A page in a panel opens its links as tabs of the current space.
+        if !(self.item_in_scope(source, profile, space) || self.panel_in_scope(source, profile))
             || self.items.view_ids().len() >= LIVE_VIEW_ABSOLUTE_LIMIT
             || self.items.get(child).is_some()
         {
@@ -883,7 +884,7 @@ impl Shell {
         else {
             return;
         };
-        if !self.item_in_scope(source, profile, space) {
+        if !(self.item_in_scope(source, profile, space) || self.panel_in_scope(source, profile)) {
             return;
         }
         let id = ItemId::generate();

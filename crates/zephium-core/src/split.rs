@@ -141,6 +141,34 @@ impl Pane {
     }
 }
 
+/// Docks `panel` at `panel_rect`, beside `tree` laid out in `region`, as one
+/// row the engine lays out in the returned region. The ratio is chosen so
+/// the tree keeps exactly `region` and the panel exactly `panel_rect`, given
+/// the same `gap` between them.
+pub fn dock(tree: Pane, region: Rect, panel: ItemId, panel_rect: Rect, gap: f64) -> (Pane, Rect) {
+    let union = Rect::new(
+        region.x,
+        region.y,
+        panel_rect.x + panel_rect.width - region.x,
+        region.height,
+    );
+    let avail = (union.width - gap).max(0.0);
+    let ratio = if avail > 0.0 {
+        region.width / avail
+    } else {
+        0.5
+    };
+    (
+        Pane::Branch {
+            axis: Axis::Row,
+            ratio,
+            a: Box::new(tree),
+            b: Box::new(Pane::Leaf(panel)),
+        },
+        union,
+    )
+}
+
 pub fn layout(root: &Pane, region: Rect, gap: f64) -> Vec<(ItemId, Rect)> {
     let mut out = Vec::new();
     place(root, region, gap, &mut out);
@@ -346,6 +374,37 @@ mod tests {
         width: 1000.0,
         height: 800.0,
     };
+
+    #[test]
+    fn a_docked_panel_and_the_tree_keep_their_exact_rects() {
+        let (a, b, panel) = (ItemId::from(1), ItemId::from(2), ItemId::from(3));
+        let tree = Pane::Branch {
+            axis: Axis::Row,
+            ratio: 0.5,
+            a: Box::new(Pane::Leaf(a)),
+            b: Box::new(Pane::Leaf(b)),
+        };
+        let region = Rect::new(256.0, 8.0, 488.0, 784.0);
+        let panel_rect = Rect::new(752.0, 8.0, 400.0, 784.0);
+        let (docked, union) = dock(tree.clone(), region, panel, panel_rect, 8.0);
+        let placed = layout(&docked, union, 8.0);
+        let rect_of = |id| placed.iter().find(|(leaf, _)| *leaf == id).unwrap().1;
+        let close = |l: Rect, r: Rect| {
+            [
+                (l.x, r.x),
+                (l.y, r.y),
+                (l.width, r.width),
+                (l.height, r.height),
+            ]
+            .iter()
+            .all(|(p, q)| (p - q).abs() < 1e-9)
+        };
+        assert!(close(rect_of(panel), panel_rect));
+        let alone = layout(&tree, region, 8.0);
+        for (leaf, rect) in alone {
+            assert!(close(rect_of(leaf), rect), "{leaf:?}");
+        }
+    }
 
     #[test]
     fn single_leaf_fills_region() {

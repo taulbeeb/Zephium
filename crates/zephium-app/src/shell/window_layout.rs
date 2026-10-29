@@ -21,8 +21,13 @@ impl Shell {
         }
         let win = self.windows.focused()?;
         let tree = self.pane_tree()?;
-        let region =
-            layout::compute(win.size, win.mode, win.metrics, self.present(&tree)).content?;
+        let region = layout::compute(
+            win.size,
+            win.mode,
+            self.layout_metrics(win),
+            self.present(&tree),
+        )
+        .content?;
         let local = Rect::new(0.0, 0.0, region.width, region.height);
         split::drop_target(&tree, local, win.metrics.gap, x - region.x, y - region.y)
     }
@@ -51,7 +56,8 @@ impl Shell {
             self.pane_tree()
         };
         let present = tree.as_ref().is_some_and(|t| self.present(t));
-        let mut l = layout::compute(win.size, win.mode, win.metrics, present);
+        let metrics = self.layout_metrics(win);
+        let mut l = layout::compute(win.size, win.mode, metrics, present);
         // A browser-owned consent sheet is window-modal. Native page views
         // are sibling views above chrome on every platform, so CSS alone
         // cannot prevent a page from obscuring the sheet or receiving input
@@ -106,10 +112,12 @@ impl Shell {
                     })
                 })
             });
-        let chrome_layout = layout::compute(win.size, win.mode, win.metrics, chrome_present);
+        let chrome_layout = layout::compute(win.size, win.mode, metrics, chrome_present);
+        // Beside a strip of panel icons the chrome spans the window beneath
+        // the page, so it can draw the strip at the trailing edge.
         if !self.chrome.position(ChromeFrame {
             rect: chrome_layout.chrome,
-            fill_width: chrome_layout.content.is_none(),
+            fill_width: chrome_layout.content.is_none() || metrics.panel_strip > 0.0,
             travel,
         }) {
             return NativeDispatch::Rejected;
@@ -130,11 +138,43 @@ impl Shell {
             }
             _ => Vec::new(),
         };
+        // The open panel docks beside the page as one more branch of the
+        // tree, sized so the page keeps exactly its region. Overlays and
+        // window-filling pages hide it with the content.
+        let panel = self
+            .shown_panel()
+            .filter(|id| self.items.tab(*id).is_some_and(TabState::shows_page))
+            .zip(l.panel)
+            .filter(|_| {
+                self.window_visible
+                    && native_policy_available
+                    && !privileged_overlay_active
+                    && filling.is_none()
+            });
+        let web_panel = (metrics.panel_strip > 0.0).then(|| {
+            let rect = l.panel.unwrap_or_default();
+            zephium_ipc::WebPanelLayout {
+                x: rect.x,
+                y: rect.y,
+                width: rect.width,
+                height: rect.height,
+                strip: metrics.panel_strip,
+            }
+        });
         (self.emit)(Projection::Layout(LayoutState {
             dividers,
             work_pane,
+            web_panel,
         }));
-        let applied = self.engine.set_content(win.id, tree, l.content);
+        let (tree, region) = match (panel, tree, l.content) {
+            (Some((panel, rect)), Some(tree), Some(region)) => {
+                let (tree, union) = split::dock(tree, region, panel, rect, metrics.gap);
+                (Some(tree), Some(union))
+            }
+            (Some((panel, rect)), _, _) => (Some(Pane::Leaf(panel)), Some(rect)),
+            (None, tree, content) => (tree, content),
+        };
+        let applied = self.engine.set_content(win.id, tree, region);
         self.reconcile_page_permission_placement();
         applied
     }
@@ -145,8 +185,13 @@ impl Shell {
         }
         let win = self.windows.focused()?;
         let tree = self.pane_tree()?;
-        let region =
-            layout::compute(win.size, win.mode, win.metrics, self.present(&tree)).content?;
+        let region = layout::compute(
+            win.size,
+            win.mode,
+            self.layout_metrics(win),
+            self.present(&tree),
+        )
+        .content?;
         let local = Rect::new(0.0, 0.0, region.width, region.height);
         let divider = split::divider_at(&tree, local, win.metrics.gap, x - region.x, y - region.y)?;
         let anchor = (
@@ -214,7 +259,9 @@ impl Shell {
             self.drop_divider();
             return;
         }
-        let Some(region) = layout::compute(win.size, win.mode, win.metrics, true).content else {
+        let Some(region) =
+            layout::compute(win.size, win.mode, self.layout_metrics(win), true).content
+        else {
             return;
         };
         let gap = win.metrics.gap;
@@ -301,7 +348,7 @@ impl Shell {
         let Some(win) = self.windows.focused() else {
             return Rect::default();
         };
-        layout::compute(win.size, win.mode, win.metrics, true)
+        layout::compute(win.size, win.mode, self.layout_metrics(win), true)
             .content
             .unwrap_or_default()
     }

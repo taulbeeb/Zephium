@@ -53,6 +53,7 @@ fn items_projection_is_one_ordered_authoritative_focused_sidebar_snapshot() {
     };
     let store = Arc::new(FakeStore {
         saved: Mutex::new(Some(SessionState {
+            panels: Default::default(),
             containers: Default::default(),
             profiles: vec![
                 PersistedProfile {

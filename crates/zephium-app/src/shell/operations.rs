@@ -61,6 +61,7 @@ impl Shell {
             Command::TabAction { id, action } => self.operation_tab_action(id, action),
             Command::Space(command) => self.operation_space(*command),
             Command::Container(command) => self.operation_container(*command),
+            Command::Panel(command) => self.operation_panel(*command),
             Command::DropTab { id, x, y } => self.operation_drop_tab(id, x, y),
             Command::DividerRelease { x, y } => self.operation_divider_release(x.zip(y)),
             Command::Run(id) => self.operation_run_command(&id),
@@ -614,7 +615,7 @@ impl Shell {
             return self.operation_show_browser_page(None);
         }
 
-        if !self.item_in_focused_scope(id) {
+        if !self.item_in_focused_scope(id) && !self.panel_in_focused_scope(id) {
             return operation_result(OperationOutcome::Rejected, OperationReason::InvalidScope);
         }
         if self
@@ -674,7 +675,7 @@ impl Shell {
     }
 
     fn operation_reload_with(&mut self, id: ItemId, ignoring_cache: bool) -> OperationDisposition {
-        if !self.item_in_focused_scope(id) {
+        if !self.item_in_focused_scope(id) && !self.panel_in_focused_scope(id) {
             return operation_result(OperationOutcome::Rejected, OperationReason::InvalidScope);
         }
         if self.recreate_after_inflight_discard(id) {
@@ -711,7 +712,7 @@ impl Shell {
     }
 
     pub(super) fn operation_history(&mut self, id: ItemId, forward: bool) -> OperationDisposition {
-        if !self.item_in_focused_scope(id) {
+        if !self.item_in_focused_scope(id) && !self.panel_in_focused_scope(id) {
             return operation_result(OperationOutcome::Rejected, OperationReason::InvalidScope);
         }
         let Some(tab) = self.items.tab(id) else {

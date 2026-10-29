@@ -616,6 +616,31 @@ pub struct ItemsState {
     #[serde(default)]
     #[specta(optional)]
     pub containers: Vec<ContainerView>,
+    /// The focused profile's web panels, in strip order.
+    #[serde(default)]
+    #[specta(optional)]
+    pub web_panels: Vec<WebPanelView>,
+}
+
+/// A site docked beside the page, shared by every space of the profile.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Type)]
+pub struct WebPanelView {
+    /// The panel's page, kept current by per-tab deltas like any tab's.
+    pub tab: TabView,
+    /// Points; the docked width when the window has room for it.
+    pub width: u32,
+    pub open: bool,
+}
+
+/// Where the open web panel is docked, in window coordinates.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, Type)]
+pub struct WebPanelLayout {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    /// The icon strip's width at the window's trailing edge.
+    pub strip: f64,
 }
 
 /// A separate cookie jar of the focused profile.
@@ -1227,6 +1252,10 @@ pub enum WorkFolderAdmitV1 {
 pub struct LayoutState {
     pub dividers: Vec<DividerView>,
     pub work_pane: Option<WorkPaneLayout>,
+    /// The icon strip and the open web panel, while the profile has panels.
+    #[serde(default)]
+    #[specta(optional)]
+    pub web_panel: Option<WebPanelLayout>,
 }
 
 /// Immediate result returned by a privileged IPC command. `accepted` with an

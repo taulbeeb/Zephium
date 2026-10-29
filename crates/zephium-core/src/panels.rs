@@ -14,6 +14,8 @@ pub const MAX_PROFILE_PANELS: usize = 24;
 pub const MIN_PANEL_WIDTH: u32 = 280;
 pub const MAX_PANEL_WIDTH: u32 = 960;
 pub const DEFAULT_PANEL_WIDTH: u32 = 400;
+/// The icon strip at the window's trailing edge, its padding included.
+pub const PANEL_STRIP_WIDTH: f64 = 52.0;
 
 pub fn clamp_panel_width(width: f64) -> u32 {
     if !width.is_finite() {

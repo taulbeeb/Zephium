@@ -299,6 +299,7 @@ fn divider_drag_updates_ratio_and_projects_strips() {
     let engine = Arc::new(FakeEngine::default());
     let strips: Arc<Mutex<Vec<DividerView>>> = Arc::new(Mutex::new(Vec::new()));
     let screen: Screen = Arc::new(Mutex::new(ItemsState {
+        web_panels: Default::default(),
         containers: Default::default(),
         projection_revision: String::new(),
         profile: None,

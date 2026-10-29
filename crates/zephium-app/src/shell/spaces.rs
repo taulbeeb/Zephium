@@ -445,6 +445,7 @@ impl Shell {
                 },
             ),
             Placement::Favorites { space } => (space, Placement::Favorites { space: target }),
+            Placement::Panel { .. } => return rejected(OperationReason::InvalidScope),
         };
         if space == target {
             return unchanged();

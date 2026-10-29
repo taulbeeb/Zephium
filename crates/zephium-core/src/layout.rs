@@ -19,6 +19,11 @@ pub struct Metrics {
     pub caption: f64,
     /// The column is put away until the pointer asks for it.
     pub sidebar_hidden: bool,
+    /// The web panel icon strip at the window's trailing edge, padding
+    /// included; zero while the profile has no panels.
+    pub panel_strip: f64,
+    /// The open web panel's width; zero while none is open.
+    pub panel: f64,
 }
 
 impl Default for Metrics {
@@ -29,6 +34,8 @@ impl Default for Metrics {
             gap: 8.0,
             caption: 0.0,
             sidebar_hidden: false,
+            panel_strip: 0.0,
+            panel: 0.0,
         }
     }
 }
@@ -83,11 +90,18 @@ pub fn clamp_work_pane_rect(window: Size, rect: Rect) -> Option<Rect> {
     ))
 }
 
+/// The page keeps at least this much width beside an open panel; a window
+/// too narrow for both does not show the panel.
+pub const MIN_CONTENT_BESIDE_PANEL: f64 = 360.0;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Layout {
     pub chrome: Rect,
     // None on an empty tab: chrome fills the inner area and renders the NTP.
     pub content: Option<Rect>,
+    /// The open web panel, docked at the trailing edge beside the content,
+    /// or beside the New Tab page chrome draws.
+    pub panel: Option<Rect>,
 }
 
 /// How far past the column a hidden sidebar's chrome reaches, so the shadow
@@ -130,11 +144,26 @@ pub fn compute(window: Size, mode: Mode, m: Metrics, content_present: bool) -> L
 fn sidebar(win: Size, m: Metrics, content_present: bool) -> Layout {
     let p = m.padding;
     let inner_h = win.height - 2.0 * p;
+    let full = Rect::new(0.0, 0.0, win.width, win.height);
+    let content_x = if m.sidebar_hidden {
+        p
+    } else {
+        p + m.sidebar_width + m.gap
+    };
+    // The strip carries its own padding; without it the window's padding
+    // ends the content as before.
+    let strip = m.panel_strip.max(0.0);
+    let right = win.width - if strip > 0.0 { strip } else { p };
+    let top = p + m.caption;
+    let height = inner_h - m.caption;
+    let panel = docked_panel(content_x, right, top, height, m);
+    let content_right = panel.map_or(right, |panel| panel.x - m.gap);
 
     if !content_present {
         return Layout {
-            chrome: Rect::new(0.0, 0.0, win.width, win.height),
+            chrome: full,
             content: None,
+            panel,
         };
     }
 
@@ -145,22 +174,31 @@ fn sidebar(win: Size, m: Metrics, content_present: bool) -> Layout {
     } else {
         p + m.sidebar_width
     };
-    let chrome = Rect::new(0.0, 0.0, chrome_width, win.height);
-    let content_x = if m.sidebar_hidden {
-        p
+    // The strip is chrome at the window's far edge, so chrome spans the
+    // window beneath the page; the page views stay above it.
+    let chrome = if strip > 0.0 {
+        full
     } else {
-        p + m.sidebar_width + m.gap
+        Rect::new(0.0, 0.0, chrome_width, win.height)
     };
-    let content = Rect::new(
-        content_x,
-        p + m.caption,
-        win.width - content_x - p,
-        inner_h - m.caption,
-    );
+    let content = Rect::new(content_x, top, content_right - content_x, height);
     Layout {
         chrome,
         content: Some(content),
+        panel,
     }
+}
+
+/// The open panel at the trailing edge of `[left, right]`, narrowed so the
+/// page keeps its minimum, or none when the window is too narrow for both.
+fn docked_panel(left: f64, right: f64, top: f64, height: f64, m: Metrics) -> Option<Rect> {
+    if !(m.panel.is_finite() && m.panel > 0.0) {
+        return None;
+    }
+    let room = right - left - m.gap - MIN_CONTENT_BESIDE_PANEL;
+    let width = m.panel.min(room);
+    (width >= f64::from(crate::panels::MIN_PANEL_WIDTH) && height > 0.0)
+        .then(|| Rect::new(right - width, top, width, height))
 }
 
 #[cfg(test)]
@@ -178,12 +216,63 @@ mod tests {
     }
 
     const M: Metrics = Metrics {
+        panel: 0.0,
+        panel_strip: 0.0,
         sidebar_width: 240.0,
         padding: 8.0,
         gap: 8.0,
         caption: 0.0,
         sidebar_hidden: false,
     };
+
+    #[test]
+    fn the_panel_strip_takes_the_trailing_edge_and_chrome_spans_the_window() {
+        let m = Metrics {
+            panel_strip: 48.0,
+            ..M
+        };
+        let l = compute(Size::new(1200.0, 800.0), Mode::Sidebar, m, true);
+        assert_eq!(l.chrome, Rect::new(0.0, 0.0, 1200.0, 800.0));
+        assert_eq!(l.content, Some(Rect::new(256.0, 8.0, 896.0, 784.0)));
+        assert_eq!(l.panel, None);
+    }
+
+    #[test]
+    fn an_open_panel_docks_beside_the_page_and_beside_the_new_tab() {
+        let m = Metrics {
+            panel_strip: 48.0,
+            panel: 400.0,
+            ..M
+        };
+        let window = Size::new(1200.0, 800.0);
+        let l = compute(window, Mode::Sidebar, m, true);
+        assert_eq!(l.panel, Some(Rect::new(752.0, 8.0, 400.0, 784.0)));
+        assert_eq!(l.content, Some(Rect::new(256.0, 8.0, 488.0, 784.0)));
+        let blank = compute(window, Mode::Sidebar, m, false);
+        assert_eq!(blank.content, None);
+        assert_eq!(blank.panel, l.panel);
+    }
+
+    #[test]
+    fn a_panel_narrows_for_the_page_and_goes_when_both_cannot_fit() {
+        let m = Metrics {
+            panel_strip: 48.0,
+            panel: 600.0,
+            ..M
+        };
+        let l = compute(Size::new(1100.0, 800.0), Mode::Sidebar, m, true);
+        let panel = l.panel.unwrap();
+        let content = l.content.unwrap();
+        assert_eq!(content.width, MIN_CONTENT_BESIDE_PANEL);
+        assert_eq!(panel.x, content.x + content.width + M.gap);
+        assert_eq!(panel.x + panel.width, 1100.0 - 48.0);
+        let narrow = compute(Size::new(900.0, 800.0), Mode::Sidebar, m, true);
+        assert_eq!(narrow.panel, None);
+        assert_eq!(
+            narrow.content.unwrap().x + narrow.content.unwrap().width,
+            900.0 - 48.0
+        );
+    }
 
     #[test]
     fn a_hidden_sidebar_gives_the_page_the_window_and_waits_beneath_it() {

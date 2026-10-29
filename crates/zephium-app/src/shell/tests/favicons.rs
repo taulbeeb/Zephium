@@ -7,6 +7,7 @@ fn favicon_pipeline_accepts_only_fixed_renderer_rasters_for_current_origin() {
     let engine = Arc::new(FakeEngine::default());
     let store = Arc::new(FakeStore::default());
     let screen: Screen = Arc::new(Mutex::new(ItemsState {
+        web_panels: Default::default(),
         containers: Default::default(),
         projection_revision: String::new(),
         profile: None,
@@ -239,6 +240,7 @@ fn private_favicon_is_visible_but_never_written_to_persistent_storage() {
     let engine = Arc::new(FakeEngine::default());
     let store = Arc::new(FakeStore::default());
     let screen: Screen = Arc::new(Mutex::new(ItemsState {
+        web_panels: Default::default(),
         containers: Default::default(),
         projection_revision: String::new(),
         profile: None,
@@ -1062,6 +1064,7 @@ fn a_private_pages_own_icon_is_drawn_but_never_written() {
     let engine = Arc::new(FakeEngine::default());
     let store = Arc::new(FakeStore::default());
     let screen: Screen = Arc::new(Mutex::new(ItemsState {
+        web_panels: Default::default(),
         containers: Default::default(),
         projection_revision: String::new(),
         profile: None,

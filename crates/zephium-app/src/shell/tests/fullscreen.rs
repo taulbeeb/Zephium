@@ -8,6 +8,7 @@ fn ready(fills_window: bool) -> (Shell, Arc<FakeEngine>, Screen, HostLog, ItemId
         .fills_window_for_fullscreen
         .store(fills_window, std::sync::atomic::Ordering::Release);
     let screen: Screen = Arc::new(Mutex::new(ItemsState {
+        web_panels: Default::default(),
         containers: Default::default(),
         projection_revision: String::new(),
         profile: None,

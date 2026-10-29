@@ -179,6 +179,7 @@ impl AgentLifecycleOwner {
 mod browser_pages;
 mod containers;
 mod kept_sites;
+mod panels;
 mod spaces;
 mod work_pane;
 
@@ -223,6 +224,9 @@ pub struct Shell {
     retained_graveyard: Vec<crate::work_resources::product::ProductWork>,
     profiles: Profiles,
     containers: zephium_core::containers::Containers,
+    panels: zephium_core::panels::Panels,
+    /// The panel each profile had open last, for the toggle. Runtime only.
+    panel_last: std::collections::HashMap<ProfileId, ItemId>,
     spaces: Spaces,
     items: Items,
     recently_closed: Vec<zephium_core::session::PersistedClosedTab>,
@@ -468,6 +472,8 @@ impl Shell {
         Self {
             profiles: Profiles::default(),
             containers: Default::default(),
+            panels: Default::default(),
+            panel_last: Default::default(),
             spaces: Spaces::default(),
             items: Items::default(),
             recently_closed: Vec::new(),
@@ -902,6 +908,9 @@ impl Shell {
             }
             Command::Container(command) => {
                 let _ = self.operation_container(*command);
+            }
+            Command::Panel(command) => {
+                let _ = self.operation_panel(*command);
             }
             Command::SetWindowSize(size) => match self.windows.focused_mut() {
                 Some(win) => {

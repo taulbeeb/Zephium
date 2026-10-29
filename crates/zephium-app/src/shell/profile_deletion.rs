@@ -204,6 +204,7 @@ impl Shell {
             window.and_then(|window| window.splits.as_ref()),
             &self.recently_closed,
             &self.containers,
+            &self.panels,
         );
         if !filtered
             .profiles
@@ -225,16 +226,26 @@ impl Shell {
             .recently_closed
             .retain(|entry| entry.profile != profile);
         filtered.spaces.retain(|space| space.profile != profile);
-        filtered.items.retain(|item| {
-            let (Placement::Favorites { space } | Placement::Space { space, .. }) = item.placement;
-            !removed_spaces.contains(&space)
+        filtered.items.retain(|item| match item.placement {
+            Placement::Favorites { space } | Placement::Space { space, .. } => {
+                !removed_spaces.contains(&space)
+            }
+            Placement::Panel { profile: owner } => owner != profile,
         });
+        filtered
+            .panels
+            .open
+            .retain(|entry| entry.profile != profile);
         filtered
             .containers
             .containers
             .retain(|container| container.profile != profile);
         let kept_items: std::collections::HashSet<ItemId> =
             filtered.items.iter().map(|item| item.id).collect();
+        filtered
+            .panels
+            .widths
+            .retain(|entry| kept_items.contains(&entry.item));
         filtered
             .containers
             .tabs
@@ -298,6 +309,7 @@ impl Shell {
             }
         }
 
+        self.forget_profile_panels(profile);
         let removed_spaces = self.spaces.remove_for_profile(profile);
         let _native_erasure_owns_close = self.items.remove_for_profile(&removed_spaces);
         self.profiles.remove(profile);
