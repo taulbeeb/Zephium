@@ -79,6 +79,9 @@ impl Hub {
                     Placement::Space { space, section } => {
                         (Some(space.to_string()), section_to_str(section))
                     }
+                    // The legacy tables predate panels; `owns_placement`
+                    // keeps them out of this writer.
+                    Placement::Panel { .. } => continue,
                 };
                 let (kind, name, url, title, zoom) = match &item.kind {
                     PersistedKind::Folder { name } => {
@@ -547,7 +550,9 @@ pub(super) fn clear_legacy_session_rows_once(conn: &mut Connection) -> rusqlite:
 }
 
 fn owns_placement(profile: ProfileId, s: &SessionState, placement: Placement) -> bool {
-    let (Placement::Favorites { space } | Placement::Space { space, .. }) = placement;
+    let (Placement::Favorites { space } | Placement::Space { space, .. }) = placement else {
+        return false;
+    };
     s.spaces
         .iter()
         .any(|x| x.id == space && x.profile == profile)

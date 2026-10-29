@@ -48,7 +48,12 @@ pub(crate) fn spread(
     let mut unplaced = Vec::new();
     let known: std::collections::HashSet<SpaceId> = spaces.iter().map(|space| space.id).collect();
     for item in items {
-        let (Placement::Favorites { space } | Placement::Space { space, .. }) = item.placement;
+        // Panels belong to no space; they pass through untouched.
+        let (Placement::Favorites { space } | Placement::Space { space, .. }) = item.placement
+        else {
+            unplaced.push(item);
+            continue;
+        };
         if known.contains(&space) {
             by_placement.entry(item.placement).or_default().push(item);
         } else {

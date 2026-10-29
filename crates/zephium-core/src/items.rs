@@ -356,10 +356,12 @@ impl Items {
         let owned: HashSet<ItemId> = self
             .items
             .iter()
-            .filter_map(|(id, item)| {
-                let (Placement::Favorites { space } | Placement::Space { space, .. }) =
-                    item.placement;
-                removed_spaces.contains(&space).then_some(*id)
+            .filter_map(|(id, item)| match item.placement {
+                Placement::Favorites { space } | Placement::Space { space, .. } => {
+                    removed_spaces.contains(&space).then_some(*id)
+                }
+                // Panels belong to the profile itself, not to one of its spaces.
+                Placement::Panel { profile } => (profile == spaces.profile()).then_some(*id),
             })
             .collect();
         if owned.is_empty() {

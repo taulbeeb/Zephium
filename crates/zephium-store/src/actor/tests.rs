@@ -238,6 +238,7 @@ fn sample() -> SessionState {
     let space = SpaceId::from(2);
     let folder = ItemId::from(20);
     SessionState {
+        panels: Default::default(),
         containers: Default::default(),
         profiles: vec![PersistedProfile {
             id: profile,
@@ -3086,6 +3087,7 @@ fn maximum_valid_session_fits_snapshot_budget() {
         })
         .collect();
     let state = zephium_core::session::canonicalize(SessionState {
+        panels: Default::default(),
         containers: Default::default(),
         profiles: vec![PersistedProfile {
             id: profile,
@@ -3526,6 +3528,7 @@ fn profile_deletion_rejects_a_hard_link_to_another_profile_database() {
     hub.record_visit(deleted, "https://deleted.example/", "Deleted");
     hub.record_visit(survivor, "https://survivor.example/", "Survivor");
     let filtered = SessionState {
+        panels: Default::default(),
         containers: Default::default(),
         profiles: vec![PersistedProfile {
             id: survivor,

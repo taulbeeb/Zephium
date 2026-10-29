@@ -28,6 +28,49 @@ struct BoundedSessionState {
     recently_closed: Vec<BoundedClosedTab>,
     #[serde(default)]
     containers: BoundedContainers,
+    #[serde(default)]
+    panels: BoundedPanels,
+}
+
+#[derive(Default, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BoundedPanels {
+    #[serde(default, deserialize_with = "deserialize_bounded_panel_widths")]
+    widths: Vec<BoundedPanelWidth>,
+    #[serde(default, deserialize_with = "deserialize_bounded_open_panels")]
+    open: Vec<BoundedOpenPanel>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BoundedPanelWidth {
+    item: ItemId,
+    width: u32,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BoundedOpenPanel {
+    profile: ProfileId,
+    item: ItemId,
+}
+
+fn deserialize_bounded_panel_widths<'de, D>(
+    deserializer: D,
+) -> Result<Vec<BoundedPanelWidth>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    bounded_json::deserialize_bounded_vec(deserializer, MAX_SESSION_ITEMS, |_| true)
+}
+
+fn deserialize_bounded_open_panels<'de, D>(
+    deserializer: D,
+) -> Result<Vec<BoundedOpenPanel>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    bounded_json::deserialize_bounded_vec(deserializer, MAX_SESSION_PROFILES, |_| true)
 }
 
 #[derive(Default, serde::Deserialize)]
@@ -167,6 +210,9 @@ enum BoundedPlacement {
         space: SpaceId,
         section: SpaceSection,
     },
+    Panel {
+        profile: ProfileId,
+    },
 }
 
 #[derive(serde::Deserialize)]
@@ -287,6 +333,7 @@ impl BoundedSessionState {
                 (BoundedPlacement::Space { space, section }, _) => {
                     Placement::Space { space, section }
                 }
+                (BoundedPlacement::Panel { profile }, _) => Placement::Panel { profile },
             };
             items.push(PersistedItem {
                 id: item.id,
@@ -342,6 +389,26 @@ impl BoundedSessionState {
                     position: None,
                 })
                 .collect(),
+            panels: zephium_core::session::PersistedPanels {
+                widths: self
+                    .panels
+                    .widths
+                    .into_iter()
+                    .map(|entry| zephium_core::session::PersistedPanelWidth {
+                        item: entry.item,
+                        width: entry.width,
+                    })
+                    .collect(),
+                open: self
+                    .panels
+                    .open
+                    .into_iter()
+                    .map(|entry| zephium_core::session::PersistedOpenPanel {
+                        profile: entry.profile,
+                        item: entry.item,
+                    })
+                    .collect(),
+            },
             containers: zephium_core::session::PersistedContainers {
                 containers: self
                     .containers
@@ -607,6 +674,7 @@ mod qa_settings_recovery_tests {
         let profile = ProfileId::from(701);
         let space = SpaceId::from(702);
         SessionState {
+            panels: Default::default(),
             containers: Default::default(),
             profiles: vec![PersistedProfile {
                 id: profile,
@@ -1889,6 +1957,56 @@ mod closed_session_wire_tests {
         value["containers"]["unknown"] = serde_json::json!(true);
         assert!(decode_authoritative_snapshot(&value.to_string()).is_none());
     }
+
+    #[test]
+    fn panels_survive_the_bounded_decoder() {
+        use zephium_core::session::{PersistedOpenPanel, PersistedPanelWidth, PersistedPanels};
+        let (profile, space, panel) = (ProfileId::from(1), SpaceId::from(2), ItemId::from(3));
+        let state = core_session::canonicalize(SessionState {
+            profiles: vec![PersistedProfile {
+                id: profile,
+                name: "P".into(),
+                kind: ProfileKind::Default,
+            }],
+            spaces: vec![PersistedSpace {
+                id: space,
+                profile,
+                name: "S".into(),
+                look: Default::default(),
+            }],
+            items: vec![PersistedItem {
+                id: panel,
+                parent: None,
+                placement: Placement::Panel { profile },
+                kind: PersistedKind::Tab {
+                    url: "https://chat.example/".into(),
+                    title: "Chat".into(),
+                    zoom: 1.0,
+                    last_active_ms: None,
+                },
+            }],
+            panels: PersistedPanels {
+                widths: vec![PersistedPanelWidth {
+                    item: panel,
+                    width: 480,
+                }],
+                open: vec![PersistedOpenPanel {
+                    profile,
+                    item: panel,
+                }],
+            },
+            ..SessionState::default()
+        });
+        assert_eq!(state.items.len(), 1);
+        assert_eq!(state.panels.open.len(), 1);
+        let mut value = serde_json::to_value(&state).unwrap();
+        assert_eq!(
+            decode_authoritative_snapshot(&value.to_string()),
+            Some(state.clone())
+        );
+        value["panels"]["unknown"] = serde_json::json!(true);
+        assert!(decode_authoritative_snapshot(&value.to_string()).is_none());
+    }
 }
 
 #[cfg(test)]
@@ -2784,6 +2902,7 @@ mod essentials_per_space_tests {
             kind,
         };
         SessionState {
+            panels: Default::default(),
             containers: Default::default(),
             profiles: vec![
                 profile(PERSONAL, "Personal", ProfileKind::Default),

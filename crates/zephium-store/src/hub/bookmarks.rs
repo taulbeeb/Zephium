@@ -484,6 +484,7 @@ mod tests {
         let profile = ProfileId::from(1);
         let space = SpaceId::from(2);
         hub.save(&SessionState {
+            panels: Default::default(),
             containers: Default::default(),
             profiles: vec![PersistedProfile {
                 id: profile,

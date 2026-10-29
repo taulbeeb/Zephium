@@ -110,6 +110,11 @@ pub enum Placement {
         space: SpaceId,
         section: SpaceSection,
     },
+    /// A web panel: a tab docked beside the page, shared by every space of
+    /// its profile and never listed among the tabs.
+    Panel {
+        profile: crate::ids::ProfileId,
+    },
 }
 
 #[derive(Clone, Debug)]

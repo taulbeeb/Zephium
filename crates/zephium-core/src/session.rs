@@ -13,6 +13,7 @@ use crate::item::{
 };
 use crate::items::Items;
 use crate::navigation;
+use crate::panels::Panels;
 use crate::profiles::{Profile, ProfileKind, Profiles};
 use crate::spaces::{Space, SpaceLook, Spaces};
 use crate::split::Pane;
@@ -41,6 +42,38 @@ pub struct SessionState {
     /// Absent on snapshots from before containers, and when there are none.
     #[serde(default, skip_serializing_if = "PersistedContainers::is_empty")]
     pub containers: PersistedContainers,
+    /// Absent on snapshots from before panels, and when no panel has a width
+    /// of its own or is open.
+    #[serde(default, skip_serializing_if = "PersistedPanels::is_empty")]
+    pub panels: PersistedPanels,
+}
+
+/// What only panels have; the panels themselves are items at
+/// `Placement::Panel`.
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PersistedPanels {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub widths: Vec<PersistedPanelWidth>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub open: Vec<PersistedOpenPanel>,
+}
+
+impl PersistedPanels {
+    pub fn is_empty(&self) -> bool {
+        self.widths.is_empty() && self.open.is_empty()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PersistedPanelWidth {
+    pub item: ItemId,
+    pub width: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PersistedOpenPanel {
+    pub profile: ProfileId,
+    pub item: ItemId,
 }
 
 /// Containers and the tabs opened in them. Tab membership is kept beside the
@@ -171,6 +204,7 @@ pub fn snapshot(
         splits,
         &[],
         &Containers::default(),
+        &Panels::default(),
     )
 }
 
@@ -184,6 +218,7 @@ pub fn snapshot_with_recently_closed(
     splits: Option<&Pane>,
     recently_closed: &[PersistedClosedTab],
     containers: &Containers,
+    panels: &Panels,
 ) -> SessionState {
     let mut state = SessionState::default();
 
@@ -207,6 +242,15 @@ pub fn snapshot_with_recently_closed(
         for placement in space_placements(space.id) {
             collect(items, placement, &mut state.items);
         }
+    }
+    for profile in state.profiles.clone() {
+        collect(
+            items,
+            Placement::Panel {
+                profile: profile.id,
+            },
+            &mut state.items,
+        );
     }
 
     let persisted_profile = |profile: ProfileId| state.profiles.iter().any(|p| p.id == profile);
@@ -245,6 +289,27 @@ pub fn snapshot_with_recently_closed(
     // Snapshots compare equal across saves; a map's order is not stable.
     space_defaults.sort_by_key(|entry| entry.space);
     state.containers.spaces = space_defaults;
+
+    let persisted_panel = |id: ItemId, profile: Option<ProfileId>| {
+        state.items.iter().any(|item| {
+            item.id == id
+                && matches!(item.placement, Placement::Panel { profile: owner }
+                    if profile.is_none_or(|profile| profile == owner))
+        })
+    };
+    let mut widths: Vec<PersistedPanelWidth> = panels
+        .widths()
+        .filter(|(item, _)| persisted_panel(*item, None))
+        .map(|(item, width)| PersistedPanelWidth { item, width })
+        .collect();
+    widths.sort_by_key(|entry| entry.item);
+    let mut open: Vec<PersistedOpenPanel> = panels
+        .opened()
+        .filter(|(profile, item)| persisted_panel(*item, Some(*profile)))
+        .map(|(profile, item)| PersistedOpenPanel { profile, item })
+        .collect();
+    open.sort_by_key(|entry| entry.profile);
+    state.panels = PersistedPanels { widths, open };
 
     let active_space = active_space.filter(|s| state.spaces.iter().any(|x| x.id == *s));
     let persisted = |id: ItemId| state.items.iter().any(|i| i.id == id);
@@ -343,6 +408,7 @@ pub struct Restored {
     pub splits: Option<Pane>,
     pub recently_closed: Vec<PersistedClosedTab>,
     pub containers: Containers,
+    pub panels: Panels,
 }
 
 /// Rebuilds a persistence snapshot through the same validation path used at
@@ -359,6 +425,7 @@ pub fn canonicalize(state: SessionState) -> SessionState {
         restored.splits.as_ref(),
         &restored.recently_closed,
         &restored.containers,
+        &restored.panels,
     )
 }
 
@@ -423,8 +490,18 @@ pub fn restore(state: SessionState) -> Restored {
     let mut items = Items::default();
     let mut browser_tabs = HashSet::new();
     for i in state.items.into_iter().take(MAX_SESSION_ITEMS) {
-        let (Placement::Favorites { space } | Placement::Space { space, .. }) = i.placement;
-        let Some(owner) = spaces.get(space).map(|space| space.profile) else {
+        let owner = match i.placement {
+            Placement::Favorites { space } | Placement::Space { space, .. } => {
+                spaces.get(space).map(|space| space.profile)
+            }
+            // A panel is a web tab at the root of its persistent profile.
+            Placement::Panel { profile } => profiles
+                .get(profile)
+                .filter(|profile| profile.kind != ProfileKind::Incognito)
+                .filter(|_| i.parent.is_none() && matches!(i.kind, PersistedKind::Tab { .. }))
+                .map(|profile| profile.id),
+        };
+        let Some(owner) = owner else {
             continue;
         };
         // A page must never run with sign-ins it was not opened with: a tab
@@ -492,6 +569,22 @@ pub fn restore(state: SessionState) -> Restored {
         });
     }
 
+    let mut panels = Panels::default();
+    let panel_of = |id: ItemId| match items.get(id).map(|item| item.placement) {
+        Some(Placement::Panel { profile }) => Some(profile),
+        _ => None,
+    };
+    for entry in state.panels.widths.into_iter().take(MAX_SESSION_ITEMS) {
+        if panel_of(entry.item).is_some() {
+            panels.set_width(entry.item, f64::from(entry.width));
+        }
+    }
+    for entry in state.panels.open.into_iter().take(MAX_SESSION_PROFILES) {
+        if panel_of(entry.item) == Some(entry.profile) {
+            panels.set_open(entry.profile, Some(entry.item));
+        }
+    }
+
     let active_space = state.active_space.filter(|id| spaces.get(*id).is_some());
     let active_item = state.active_item.filter(|id| {
         active_space.is_some_and(|space| item_in_space_scope(&items, &spaces, *id, space))
@@ -520,6 +613,7 @@ pub fn restore(state: SessionState) -> Restored {
         splits,
         recently_closed,
         containers,
+        panels,
     }
 }
 
@@ -579,11 +673,14 @@ fn item_in_space_scope(items: &Items, spaces: &Spaces, id: ItemId, space: SpaceI
     let Some(item) = items.get(id).filter(|item| item.tab().is_some()) else {
         return false;
     };
-    let (Placement::Favorites { space: item_space }
-    | Placement::Space {
-        space: item_space, ..
-    }) = item.placement;
-    item_space == space
+    match item.placement {
+        Placement::Favorites { space: item_space }
+        | Placement::Space {
+            space: item_space, ..
+        } => item_space == space,
+        // A panel is never a tab of a space: never active, never split.
+        Placement::Panel { .. } => false,
+    }
 }
 
 fn valid_split_tree(tree: &Pane, items: &Items, spaces: &Spaces, space: SpaceId) -> bool {
@@ -832,6 +929,7 @@ mod tests {
             None,
             &recent,
             &Containers::default(),
+            &Panels::default(),
         );
         assert_eq!(state.recently_closed.len(), MAX_RECENTLY_CLOSED_TABS);
         assert_eq!(state.recently_closed[0].url, "https://example.com/3");
@@ -869,6 +967,7 @@ mod tests {
             None,
             &[record(Some(3))],
             &Containers::default(),
+            &Panels::default(),
         );
         assert_eq!(state.recently_closed[0].position, Some(3));
         let written = serde_json::to_string(&state).unwrap();
@@ -885,6 +984,7 @@ mod tests {
             None,
             &[record(Some(u32::MAX))],
             &Containers::default(),
+            &Panels::default(),
         );
         assert_eq!(wild.recently_closed[0].position, None);
     }
@@ -918,6 +1018,7 @@ mod tests {
                 record("partial", Some(ClosedSessionId::from(8)), None),
             ],
             &Containers::default(),
+            &Panels::default(),
         );
         assert_eq!(state.recently_closed.len(), 2);
         assert_eq!(state.recently_closed[0].title, "legacy");
@@ -1157,6 +1258,110 @@ mod tests {
         assert_eq!(canonicalize(state.clone()), state);
     }
 
+    fn panel_state() -> SessionState {
+        let mut state = container_state();
+        let panel = |id: u128, profile: u128| PersistedItem {
+            id: ItemId::from(id),
+            parent: None,
+            placement: Placement::Panel {
+                profile: ProfileId::from(profile),
+            },
+            kind: PersistedKind::Tab {
+                url: format!("https://chat.example/{id}"),
+                title: "Chat".into(),
+                zoom: 1.0,
+                last_active_ms: None,
+            },
+        };
+        state.items.push(panel(20, 1));
+        state.items.push(panel(21, 1));
+        state.items.push(panel(22, 3));
+        state.panels = PersistedPanels {
+            widths: vec![PersistedPanelWidth {
+                item: ItemId::from(21),
+                width: 520,
+            }],
+            open: vec![PersistedOpenPanel {
+                profile: ProfileId::from(1),
+                item: ItemId::from(21),
+            }],
+        };
+        state
+    }
+
+    #[test]
+    fn panels_their_widths_and_the_open_one_round_trip() {
+        let state = canonicalize(panel_state());
+        let restored = restore(state.clone());
+        let personal = Placement::Panel {
+            profile: ProfileId::from(1),
+        };
+        assert_eq!(
+            restored.items.roots(personal),
+            &[ItemId::from(20), ItemId::from(21)]
+        );
+        assert_eq!(restored.panels.width(ItemId::from(21)), 520);
+        assert_eq!(
+            restored.panels.open(ProfileId::from(1)),
+            Some(ItemId::from(21))
+        );
+        assert_eq!(state.panels.widths.len(), 1);
+        assert_eq!(canonicalize(state.clone()), state);
+    }
+
+    #[test]
+    fn a_panel_of_a_missing_or_private_profile_or_not_a_page_is_dropped() {
+        let mut state = panel_state();
+        state.profiles[1].kind = ProfileKind::Incognito;
+        state.items.push(PersistedItem {
+            id: ItemId::from(23),
+            parent: None,
+            placement: Placement::Panel {
+                profile: ProfileId::from(1),
+            },
+            kind: PersistedKind::Folder { name: "F".into() },
+        });
+        state.items.push(PersistedItem {
+            id: ItemId::from(24),
+            parent: None,
+            placement: Placement::Panel {
+                profile: ProfileId::from(77),
+            },
+            kind: PersistedKind::Tab {
+                url: "https://chat.example/".into(),
+                title: "Chat".into(),
+                zoom: 1.0,
+                last_active_ms: None,
+            },
+        });
+        let restored = restore(state);
+        for id in [22, 23, 24] {
+            assert!(restored.items.get(ItemId::from(id)).is_none(), "{id}");
+        }
+        assert!(restored.items.get(ItemId::from(20)).is_some());
+    }
+
+    #[test]
+    fn only_a_profiles_own_panel_can_be_open_and_no_panel_is_ever_the_active_tab() {
+        let mut state = panel_state();
+        state.panels.open = vec![
+            PersistedOpenPanel {
+                profile: ProfileId::from(3),
+                item: ItemId::from(21),
+            },
+            PersistedOpenPanel {
+                profile: ProfileId::from(1),
+                item: ItemId::from(10),
+            },
+        ];
+        state.active_space = Some(SpaceId::from(2));
+        state.active_item = Some(ItemId::from(20));
+        let restored = restore(state);
+        assert_eq!(restored.panels.open(ProfileId::from(3)), None);
+        assert_eq!(restored.panels.open(ProfileId::from(1)), None);
+        assert_eq!(restored.active_item, None);
+    }
+
     #[test]
     fn a_snapshot_without_containers_keeps_its_old_shape() {
         let (profiles, spaces, mut items, _, space) = seed();
@@ -1166,6 +1371,7 @@ mod tests {
         let state = snapshot(&profiles, &spaces, &items, Some(space), Some(id), None);
         let json = serde_json::to_string(&state).unwrap();
         assert!(!json.contains("containers"));
+        assert!(!json.contains("panels"));
         let legacy: SessionState = serde_json::from_str(&json).unwrap();
         assert_eq!(legacy, state);
     }
@@ -1295,6 +1501,7 @@ mod tests {
     #[test]
     fn restore_drops_dangling_references() {
         let state = SessionState {
+            panels: Default::default(),
             containers: Default::default(),
             profiles: vec![],
             spaces: vec![PersistedSpace {
@@ -1336,6 +1543,7 @@ mod tests {
         let dangerous = ItemId::from(11);
         let private_tab = ItemId::from(12);
         let state = SessionState {
+            panels: Default::default(),
             containers: Default::default(),
             profiles: vec![
                 PersistedProfile {

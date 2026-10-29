@@ -27,6 +27,8 @@ pub mod media;
 pub mod navigation;
 /// Markdown notes the person owns, described by an index built from the files.
 pub mod notes;
+/// Sites docked beside the page, shared by a profile's spaces.
+pub mod panels;
 pub mod permissions;
 pub mod ports;
 pub mod profiles;
