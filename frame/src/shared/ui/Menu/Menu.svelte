@@ -21,7 +21,7 @@
   import Icon from "../Icon/Icon.svelte";
   import Mark from "./Mark.svelte";
   import "./popover.css";
-  import { menuMaterialFor } from "./material";
+  import { menuLayerFor, menuMaterialFor } from "./material";
   import { layoutAnchor } from "./anchor";
   let {
     label,
@@ -49,6 +49,7 @@
   } = $props();
   let triggerElement = $state<HTMLButtonElement | null>(null);
   let material = $state<"opaque" | undefined>();
+  let layer = $state<"dialog" | undefined>();
   // A menu that can express a choice keeps the mark column on every row, so
   // the labels do not step sideways as the choice moves.
   let choice = $derived(entries.some((entry) => entry.kind === "item" && "checked" in entry));
@@ -56,7 +57,10 @@
 
 <DropdownMenu.Root
   onOpenChange={(open) => {
-    if (open) material = menuMaterialFor(triggerElement);
+    if (open) {
+      material = menuMaterialFor(triggerElement);
+      layer = menuLayerFor(triggerElement);
+    }
   }}
 >
   <DropdownMenu.Trigger bind:ref={triggerElement} class={triggerClass} aria-label={label}>
@@ -65,6 +69,7 @@
   <DropdownMenu.Portal>
     <DropdownMenu.Content
       data-menu-material={material}
+      data-menu-layer={layer}
       class={["ui-menu ui-menu-scroll", contentClass].filter(Boolean).join(" ")}
       {side}
       {align}

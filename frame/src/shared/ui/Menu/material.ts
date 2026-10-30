@@ -4,3 +4,9 @@ export function menuMaterialFor(trigger: HTMLElement | null | undefined): "opaqu
     ? "opaque"
     : undefined;
 }
+
+/** A menu opened from a modal sheet portals to the body, under the sheet's
+    layer; this lifts it over the sheet that owns it. */
+export function menuLayerFor(trigger: HTMLElement | null | undefined): "dialog" | undefined {
+  return trigger?.closest('[role="dialog"], [role="alertdialog"]') ? "dialog" : undefined;
+}

@@ -32,6 +32,11 @@
   backdrop-filter: none;
 }
 
+/* Over the modal sheet it opened from, which sits above the chrome's menus. */
+.ui-menu[data-menu-layer="dialog"] {
+  z-index: 90;
+}
+
 /* A panel rather than a list: its contents own their own spacing. */
 .ui-popover {
   padding: 10px;

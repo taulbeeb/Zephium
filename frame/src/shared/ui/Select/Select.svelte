@@ -4,7 +4,7 @@
   import "../Menu/popover.css";
   import "../Shine/shine.css";
   import "../Button/control.css";
-  import { menuMaterialFor } from "../Menu/material";
+  import { menuLayerFor, menuMaterialFor } from "../Menu/material";
   import { layoutAnchor } from "../Menu/anchor";
   import { untrack } from "svelte";
   let {
@@ -25,6 +25,7 @@
   const uid = $props.id();
   let triggerElement = $state<HTMLButtonElement | null>(null);
   let material = $state<"opaque" | undefined>();
+  let layer = $state<"dialog" | undefined>();
   let contentElement = $state<HTMLElement | null>(null);
   let current = $derived(options.find((option) => option.value === value)?.label ?? "");
 
@@ -77,7 +78,10 @@
   <label for={uid} class:sr-only={labelHidden}>{label}</label>
   <Select.Root
     onOpenChange={(open) => {
-      if (open) material = menuMaterialFor(triggerElement);
+      if (open) {
+        material = menuMaterialFor(triggerElement);
+        layer = menuLayerFor(triggerElement);
+      }
     }}
     type="single"
     bind:value
@@ -113,6 +117,7 @@
       <Select.Content
         bind:ref={contentElement}
         data-menu-material={material}
+        data-menu-layer={layer}
         class="ui-menu ui-select-menu"
         side="bottom"
         align="start"
