@@ -566,3 +566,41 @@ fn pages_step_aside_while_the_panel_sheet_is_open() {
     assert!(done(panel_op(&mut shell, PanelCommand::Sheet(false))));
     assert!(shown(&engine).is_some());
 }
+
+#[test]
+fn dragging_a_docked_panel_edge_natively_sets_its_width() {
+    let (mut shell, _engine, screen, _store) = browsed();
+    let tab = active_id(&screen);
+    navigate_and_commit(&mut shell, tab, "news.example");
+    let panel = add(&mut shell, "chat.example");
+    let window = shell.windows.focused().unwrap().id;
+    let before = shell.panels.width(panel);
+    // The stage reports the composed tree with the panel edge moved left.
+    let metrics = shell.layout_metrics(shell.windows.focused().unwrap());
+    let win = shell.windows.focused().unwrap();
+    let placed = layout::compute(win.size, win.mode, metrics, true);
+    let (content, rect) = (placed.content.unwrap(), placed.panel.unwrap());
+    let room = rect.x + rect.width - content.x - metrics.gap;
+    let wider = f64::from(before) + 120.0;
+    shell.handle(Command::Engine(EngineEvent::SplitChanged {
+        window,
+        tree: Pane::Branch {
+            axis: Axis::Row,
+            ratio: 1.0 - wider / room,
+            a: Box::new(Pane::Leaf(tab)),
+            b: Box::new(Pane::Leaf(panel)),
+        },
+    }));
+    assert_eq!(shell.panels.width(panel), before + 120);
+    // A tree that is not the composition goes the ordinary way and is refused.
+    shell.handle(Command::Engine(EngineEvent::SplitChanged {
+        window,
+        tree: Pane::Branch {
+            axis: Axis::Row,
+            ratio: 0.5,
+            a: Box::new(Pane::Leaf(panel)),
+            b: Box::new(Pane::Leaf(tab)),
+        },
+    }));
+    assert_eq!(shell.panels.width(panel), before + 120);
+}

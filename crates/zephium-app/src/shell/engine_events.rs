@@ -2,7 +2,7 @@
 
 use super::*;
 
-fn valid_native_split_update(current: &Pane, candidate: &Pane) -> bool {
+pub(super) fn valid_native_split_update(current: &Pane, candidate: &Pane) -> bool {
     match (current, candidate) {
         (Pane::Leaf(expected), Pane::Leaf(actual)) => expected == actual,
         (
@@ -340,6 +340,8 @@ impl Shell {
                     }
                 }
             },
+            EngineEvent::SplitChanged { window, tree }
+                if self.docked_split_changed(window, &tree) => {}
             EngineEvent::SplitChanged { window, tree } => {
                 // Native divider drags may update ratios only. Never let a
                 // stale or malformed callback mutate topology, swap tabs, or

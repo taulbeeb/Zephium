@@ -502,6 +502,53 @@ impl Shell {
         mutation_result(native)
     }
 
+    /// A native divider drag in the tree a docked panel was composed into.
+    /// The root's divider is the panel's edge and sets its width; a divider
+    /// within the page's own split carries over to it. Returns false when
+    /// the tree is not that composition, for the ordinary split path.
+    pub(super) fn docked_split_changed(&mut self, window: WindowId, tree: &Pane) -> bool {
+        let Some(panel) = self.shown_panel() else {
+            return false;
+        };
+        let Pane::Branch {
+            axis: Axis::Row,
+            ratio,
+            a,
+            b,
+        } = tree
+        else {
+            return false;
+        };
+        if **b != Pane::Leaf(panel) || self.panels.floats(panel) || !ratio.is_finite() {
+            return false;
+        }
+        let Some(win) = self.windows.focused().filter(|win| win.id == window) else {
+            return false;
+        };
+        let metrics = self.layout_metrics(win);
+        let placed = layout::compute(win.size, win.mode, metrics, true);
+        let (Some(content), Some(rect)) = (placed.content, placed.panel) else {
+            return true;
+        };
+        let room = (rect.x + rect.width - content.x - metrics.gap).max(0.0);
+        let width = room * (1.0 - ratio.clamp(0.0, 1.0));
+        let (profile, space) = (win.profile, win.space);
+        let inner = win.splits.as_ref().is_some_and(|current| {
+            super::engine_events::valid_native_split_update(current, a)
+                && self.pane_in_scope(a, profile, space)
+        });
+        if inner {
+            if let Some(win) = self.windows.get_mut(window) {
+                win.splits = Some((**a).clone());
+            }
+        }
+        self.panels.set_width(panel, width);
+        self.schedule_persist();
+        self.project_items();
+        let _ = self.relayout();
+        true
+    }
+
     /// The panel shown beside the page in the focused window right now.
     pub(super) fn shown_panel(&self) -> Option<ItemId> {
         let window = self.windows.focused()?;
