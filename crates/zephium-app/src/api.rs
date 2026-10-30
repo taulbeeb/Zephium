@@ -347,6 +347,8 @@ pub enum PanelNavigation {
     Back,
     Forward,
     Reload,
+    /// To the panel's home address.
+    Home,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

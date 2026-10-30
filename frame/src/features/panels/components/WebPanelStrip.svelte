@@ -7,6 +7,7 @@
     Cancel01Icon,
     Globe02Icon,
     ArrowReloadHorizontalIcon,
+    Home01Icon,
     MinusSignIcon,
     PlusSignIcon,
     PinIcon,
@@ -43,7 +44,7 @@
   // floats, since a floating panel has no band for one.
   const chosen = $derived(preferences.value("panels.toolbar"));
   const toolbar = $derived(chosen === "header" ? (header ? "hidden" : "top") : chosen);
-  const shows = (group: "navigation" | "reload" | "zoom" | "layout" | "close") =>
+  const shows = (group: "navigation" | "reload" | "home" | "zoom" | "layout" | "close") =>
     preferences.value(`panels.toolbar-${group}`) !== "false";
   const open = $derived(tabs.openPanel());
   let dragged = $state<string | null>(null);
@@ -177,6 +178,11 @@
           icon={ArrowReloadHorizontalIcon}
           label={m.panels_reload()}
           onclick={() => void tabs.navigatePanel(open.tab.id, "reload")}
+        />{/if}
+      {#if shows("home")}<IconButton
+          icon={Home01Icon}
+          label={m.panels_home()}
+          onclick={() => void tabs.navigatePanel(open.tab.id, "home")}
         />{/if}
       {#if shows("zoom")}<IconButton
           icon={PlusSignIcon}

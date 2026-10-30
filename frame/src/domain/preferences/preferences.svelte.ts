@@ -65,6 +65,7 @@ const defaults = {
   "panels.toolbar": "header",
   "panels.toolbar-navigation": "true",
   "panels.toolbar-reload": "true",
+  "panels.toolbar-home": "true",
   "panels.toolbar-zoom": "true",
   "panels.toolbar-layout": "true",
   "panels.toolbar-close": "true",

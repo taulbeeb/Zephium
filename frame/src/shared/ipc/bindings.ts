@@ -2616,7 +2616,7 @@ export type PanelLayout = {
 	sheet: PanelRect | null,
 };
 
-export type PanelNavigationV1 = "back" | "forward" | "reload";
+export type PanelNavigationV1 = "back" | "forward" | "reload" | "home";
 
 /**
  *  A rectangle in the launcher's own coordinates: CSS pixels from the top-left

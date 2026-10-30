@@ -64,6 +64,7 @@ pub const KEYS: &[&str] = &[
     "panels.toolbar",
     "panels.toolbar-navigation",
     "panels.toolbar-reload",
+    "panels.toolbar-home",
     "panels.toolbar-zoom",
     "panels.toolbar-layout",
     "panels.toolbar-close",
@@ -330,6 +331,7 @@ pub fn value_allowed(key: &str, value: &str) -> bool {
         | "tabs.automatic-pip"
         | "panels.toolbar-navigation"
         | "panels.toolbar-reload"
+        | "panels.toolbar-home"
         | "panels.toolbar-zoom"
         | "panels.toolbar-layout"
         | "panels.toolbar-close"

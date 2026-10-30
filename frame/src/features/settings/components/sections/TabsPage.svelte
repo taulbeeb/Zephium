@@ -30,7 +30,10 @@
   /><PreferenceSwitch
     id="panels.toolbar-reload"
     preference="panels.toolbar-reload"
-  /><PreferenceSwitch id="panels.toolbar-zoom" preference="panels.toolbar-zoom" /><PreferenceSwitch
+  /><PreferenceSwitch id="panels.toolbar-home" preference="panels.toolbar-home" /><PreferenceSwitch
+    id="panels.toolbar-zoom"
+    preference="panels.toolbar-zoom"
+  /><PreferenceSwitch
     id="panels.toolbar-layout"
     preference="panels.toolbar-layout"
   /><PreferenceSwitch id="panels.toolbar-close" preference="panels.toolbar-close" /></SettingsGroup

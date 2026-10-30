@@ -364,6 +364,12 @@ export const fields = {
     description: m.panels_toolbar_reload_help,
     initial: true,
   },
+  "panels.toolbar-home": {
+    section: "tabs",
+    label: m.panels_toolbar_home,
+    description: m.panels_toolbar_home_help,
+    initial: true,
+  },
   "panels.toolbar-zoom": {
     section: "tabs",
     label: m.panels_toolbar_zoom,

@@ -4,6 +4,7 @@
     ArrowLeft01Icon,
     ArrowRight01Icon,
     ArrowReloadHorizontalIcon,
+    Home01Icon,
     Cancel01Icon,
     MinusSignIcon,
     PinOffIcon,
@@ -17,7 +18,7 @@
 
   let { place, panel }: { place: WebPanelPlace; panel: WebPanelView } = $props();
 
-  const shows = (group: "navigation" | "reload" | "zoom" | "layout" | "close") =>
+  const shows = (group: "navigation" | "reload" | "home" | "zoom" | "layout" | "close") =>
     preferences.value(`panels.toolbar-${group}`) !== "false";
   const id = $derived(panel.tab.id);
 </script>
@@ -48,6 +49,11 @@
       icon={ArrowReloadHorizontalIcon}
       label={m.panels_reload()}
       onclick={() => void tabs.navigatePanel(id, "reload")}
+    />{/if}
+  {#if shows("home")}<IconButton
+      icon={Home01Icon}
+      label={m.panels_home()}
+      onclick={() => void tabs.navigatePanel(id, "home")}
     />{/if}
   <span class="spacer"></span>
   {#if shows("zoom")}<IconButton

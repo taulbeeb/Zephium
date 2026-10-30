@@ -69,6 +69,18 @@ pub struct PanelSettings {
     /// Drawn on the strip instead of the site's icon.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<crate::spaces::SpaceIcon>,
+    /// Where Home takes the panel: the address it was added with, or last
+    /// given in its sheet. Kept by the shell, never set by chrome.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub home: Option<String>,
+}
+
+pub const MAX_PANEL_HOME_BYTES: usize = 2048;
+
+/// A web address Home can go to.
+pub fn home_allowed(home: &str) -> bool {
+    home.len() <= MAX_PANEL_HOME_BYTES
+        && url::Url::parse(home).is_ok_and(|url| matches!(url.scheme(), "http" | "https"))
 }
 
 pub const MAX_PANEL_SELECTOR_BYTES: usize = 256;
@@ -129,8 +141,10 @@ impl PanelSettings {
             .map(|selector| selector.trim().to_owned())
             .filter(|selector| selector_allowed(selector));
         let icon = self.icon.filter(crate::spaces::SpaceIcon::valid);
+        let home = self.home.filter(|home| home_allowed(home));
         Self {
             name,
+            home,
             selector,
             icon,
             unload_after_minutes: self
@@ -291,6 +305,20 @@ mod tests {
         assert_eq!(kept.selector.as_deref(), Some("#main"));
         assert_eq!(kept.icon, None);
         assert!(panels.floats(id));
+        for (home, kept) in [
+            ("https://chat.example/inbox", true),
+            ("file:///etc/hosts", false),
+            ("javascript:alert(1)", false),
+        ] {
+            panels.set_settings(
+                id,
+                PanelSettings {
+                    home: Some(home.into()),
+                    ..PanelSettings::default()
+                },
+            );
+            assert_eq!(panels.settings(id).home.is_some(), kept, "{home}");
+        }
     }
 
     #[test]

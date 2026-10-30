@@ -65,6 +65,8 @@ struct BoundedPanelSettings {
     selector: Option<String>,
     #[serde(default)]
     icon: Option<zephium_core::spaces::SpaceIcon>,
+    #[serde(default)]
+    home: Option<String>,
 }
 
 fn deserialize_bounded_panel_settings<'de, D>(
@@ -87,6 +89,10 @@ where
                 }
                 _ => true,
             }
+            && entry
+                .home
+                .as_ref()
+                .is_none_or(|home| home.len() <= zephium_core::panels::MAX_PANEL_HOME_BYTES)
     })
 }
 
@@ -455,6 +461,7 @@ impl BoundedSessionState {
                             floating: entry.floating,
                             selector: entry.selector,
                             icon: entry.icon,
+                            home: entry.home,
                         },
                     })
                     .collect(),
@@ -2062,6 +2069,7 @@ mod closed_session_wire_tests {
                         floating: true,
                         selector: Some("#chat".into()),
                         icon: Some(zephium_core::spaces::SpaceIcon::Emoji("💬".into())),
+                        home: Some("https://chat.example/".into()),
                         ..Default::default()
                     },
                 }],

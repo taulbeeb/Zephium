@@ -39,6 +39,7 @@ pub(crate) enum PanelNavigationV1 {
     Back,
     Forward,
     Reload,
+    Home,
 }
 
 fn panel_of(value: &str) -> Option<ItemId> {
@@ -217,6 +218,7 @@ pub(crate) fn panels_navigate(
         PanelNavigationV1::Back => PanelNavigation::Back,
         PanelNavigationV1::Forward => PanelNavigation::Forward,
         PanelNavigationV1::Reload => PanelNavigation::Reload,
+        PanelNavigationV1::Home => PanelNavigation::Home,
     };
     match panel_of(&panel).filter(|_| admitted(&caller, "panels_navigate")) {
         Some(id) => dispatch(
@@ -266,6 +268,8 @@ pub(crate) fn panels_configure(
                     floating: settings.floating,
                     selector: settings.selector,
                     icon,
+                    // The shell keeps Home; chrome never sets it.
+                    home: None,
                 },
             },
         ),

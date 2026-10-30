@@ -188,6 +188,12 @@ Gaps closed after phase 1:
 - **Waiting strip:** the window's right edge is watched natively, as the
   left is for a hidden sidebar, since the page takes the pointer.
 
+- **Home:** each panel keeps a home address, set when it is added and
+  when a new address is given in its sheet; panels from before take their
+  page at the next launch. Home is in the header and the strip's buttons,
+  with its own switch. Chrome never sets it: settings from the sheet keep
+  the shell's.
+
 Not done:
 
 - **Header hover on macOS:** while the pointer is over the page layer the

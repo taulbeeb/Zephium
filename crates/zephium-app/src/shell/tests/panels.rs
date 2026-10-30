@@ -651,3 +651,59 @@ fn a_docked_panel_leaves_a_header_band_and_a_floating_one_does_not() {
     let _ = shell.relayout();
     assert_eq!(insets(&engine), docked);
 }
+
+#[test]
+fn home_returns_a_panel_to_its_address_and_follows_the_sheet() {
+    let (mut shell, engine, _screen, _store) = browsed();
+    let panel = add(&mut shell, "chat.example");
+    let home = navigation::classify("chat.example").unwrap().to_string();
+    assert_eq!(
+        shell.panels.settings(panel).home.as_deref(),
+        Some(home.as_str())
+    );
+    commit_url(&mut shell, panel, "https://chat.example/thread/42");
+    let went = |engine: &FakeEngine, url: &str| {
+        engine
+            .calls()
+            .iter()
+            .filter(|call| **call == format!("navigate {panel} {url}"))
+            .count()
+    };
+    let before = went(&engine, &home);
+    assert!(done(panel_op(
+        &mut shell,
+        PanelCommand::Navigate {
+            id: panel,
+            action: PanelNavigation::Home,
+        },
+    )));
+    assert_eq!(went(&engine, &home), before + 1);
+    // Settings from chrome never carry Home away.
+    assert!(done(panel_op(
+        &mut shell,
+        PanelCommand::Configure {
+            id: panel,
+            settings: zephium_core::panels::PanelSettings {
+                name: Some("Chat".into()),
+                ..Default::default()
+            },
+        },
+    )));
+    assert_eq!(
+        shell.panels.settings(panel).home.as_deref(),
+        Some(home.as_str())
+    );
+    // A new address in the sheet becomes Home.
+    assert!(done(panel_op(
+        &mut shell,
+        PanelCommand::Load {
+            id: panel,
+            input: "mail.example".into(),
+        },
+    )));
+    let mail = navigation::classify("mail.example").unwrap().to_string();
+    assert_eq!(
+        shell.panels.settings(panel).home.as_deref(),
+        Some(mail.as_str())
+    );
+}

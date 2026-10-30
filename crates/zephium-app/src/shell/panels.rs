@@ -109,7 +109,17 @@ impl Shell {
                 if !self.panel_in_scope(id, profile) {
                     return rejected(OperationReason::InvalidScope);
                 }
-                self.operation_navigate(id, input)
+                // The sheet's address is the panel's home.
+                let home = self
+                    .search
+                    .engine
+                    .configured_classify(&input, &self.search.custom_url)
+                    .map(|url| url.to_string());
+                let result = self.operation_navigate(id, input);
+                if result.outcome != OperationOutcome::Rejected {
+                    self.set_panel_home(id, home);
+                }
+                result
             }
             PanelCommand::Navigate { id, action } => {
                 if !self.panel_in_scope(id, profile) {
@@ -124,6 +134,10 @@ impl Shell {
                     PanelNavigation::Back => self.operation_history(id, false),
                     PanelNavigation::Forward => self.operation_history(id, true),
                     PanelNavigation::Reload => self.operation_reload(id),
+                    PanelNavigation::Home => match self.panels.settings(id).home {
+                        Some(home) => self.operation_navigate(id, home),
+                        None => unchanged(),
+                    },
                 }
             }
             PanelCommand::Configure { id, settings } => self.configure_panel(profile, id, settings),
@@ -247,7 +261,19 @@ impl Shell {
             return rejected(OperationReason::InvalidInput);
         }
         self.engine.set_mobile_user_agent(id, false);
+        self.set_panel_home(id, Some(url.to_string()));
         self.open_panel(profile, Some(id))
+    }
+
+    /// Keeps where Home takes a panel; anything but a web address is dropped.
+    fn set_panel_home(&mut self, id: ItemId, home: Option<String>) {
+        let settings = PanelSettings {
+            home,
+            ..self.panels.settings(id)
+        };
+        if self.panels.set_settings(id, settings) {
+            self.schedule_persist();
+        }
     }
 
     fn remove_panel(&mut self, profile: ProfileId, id: ItemId) -> OperationDisposition {
@@ -347,6 +373,11 @@ impl Shell {
         }
         let before = self.panels.settings(id);
         let was_mobile = before.mobile;
+        // Home is the shell's to keep; chrome never sends it.
+        let settings = PanelSettings {
+            home: before.home.clone(),
+            ..settings
+        };
         if !self.panels.set_settings(id, settings) {
             return unchanged();
         }
@@ -624,6 +655,17 @@ impl Shell {
     pub(super) fn restore_open_panel(&mut self) {
         let panels = self.all_panels();
         for id in &panels {
+            // A panel kept from before Home existed takes its page as home.
+            if self.panels.settings(*id).home.is_none() {
+                let url = self
+                    .items
+                    .tab(*id)
+                    .and_then(|tab| tab.url.as_ref())
+                    .map(ToString::to_string);
+                if url.is_some() {
+                    self.set_panel_home(*id, url);
+                }
+            }
             let settings = self.panels.settings(*id);
             if settings.mobile {
                 self.engine.set_mobile_user_agent(*id, true);
