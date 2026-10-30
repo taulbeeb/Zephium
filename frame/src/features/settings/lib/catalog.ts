@@ -340,6 +340,47 @@ export const fields = {
       { value: "auto", label: m.panels_strip_pref_auto },
     ],
   },
+  "panels.toolbar": {
+    section: "tabs",
+    label: m.panels_toolbar_pref,
+    description: m.panels_toolbar_pref_help,
+    initial: "bottom",
+    options: [
+      { value: "bottom", label: m.panels_toolbar_bottom },
+      { value: "top", label: m.panels_toolbar_top },
+      { value: "hidden", label: m.panels_toolbar_hidden },
+    ],
+  },
+  "panels.toolbar-navigation": {
+    section: "tabs",
+    label: m.panels_toolbar_navigation,
+    description: m.panels_toolbar_navigation_help,
+    initial: true,
+  },
+  "panels.toolbar-reload": {
+    section: "tabs",
+    label: m.panels_toolbar_reload,
+    description: m.panels_toolbar_reload_help,
+    initial: true,
+  },
+  "panels.toolbar-zoom": {
+    section: "tabs",
+    label: m.panels_toolbar_zoom,
+    description: m.panels_toolbar_zoom_help,
+    initial: true,
+  },
+  "panels.toolbar-layout": {
+    section: "tabs",
+    label: m.panels_toolbar_layout,
+    description: m.panels_toolbar_layout_help,
+    initial: true,
+  },
+  "panels.toolbar-close": {
+    section: "tabs",
+    label: m.panels_toolbar_close,
+    description: m.panels_toolbar_close_help,
+    initial: true,
+  },
   "tabs.archive": {
     section: "tabs",
     label: m.pref_tabs_archive,

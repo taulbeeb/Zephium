@@ -170,8 +170,22 @@ Gaps closed after phase 1:
 - **Floating width:** a width grip in the strip's controls while the panel
   floats; drag toward the page to widen, or use the arrow keys.
 
+- **Docked width on macOS:** the stage spans the page and its docked
+  panel, so it receives a drag of the gap between them; the shell reads
+  the composed tree's root ratio as the panel's width.
+- **Panel buttons:** Settings, Tabs, Web Panels sets where the open
+  panel's buttons stand (bottom or top of the strip, or hidden) and which
+  groups show: back and forward, reload, zoom, slide over or keep beside,
+  close. A floating panel's width grip stays whenever buttons show.
+
 Not done:
 
+- **A header bar above the panel:** buttons drawn across the top of the
+  panel itself. The interface cannot draw over a page, so the panel's page
+  would have to start lower than the page beside it. The split engine lays
+  every leaf of a branch at the same height, and the macOS stage takes
+  clicks in the gaps between pages, so this needs a new layout shape and
+  native hit-testing changes.
 - **Search in Web Panel:** WebKit gives the browser no hook for the
   selected text in its menu. Type the search in the panel's address field.
 - **Padding and animation preferences:** the strip follows Zephium's own

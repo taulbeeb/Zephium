@@ -61,6 +61,12 @@ pub const KEYS: &[&str] = &[
     "tabs.external-position",
     "tabs.close-button",
     "panels.strip",
+    "panels.toolbar",
+    "panels.toolbar-navigation",
+    "panels.toolbar-reload",
+    "panels.toolbar-zoom",
+    "panels.toolbar-layout",
+    "panels.toolbar-close",
     "ui.theme-contrast",
     "notes.enabled",
     "tasks.enabled",
@@ -234,6 +240,8 @@ pub fn value_allowed(key: &str, value: &str) -> bool {
         "tabs.close-button" => matches!(value, "hover" | "always"),
         // The web panel strip stays, or waits at the window's edge.
         "panels.strip" => matches!(value, "always" | "auto"),
+        // Where the open panel's buttons stand on the strip, if at all.
+        "panels.toolbar" => matches!(value, "bottom" | "top" | "hidden"),
         "tabs.after-close" => matches!(value, "next" | "previous" | "recent"),
         // A new tab in front at launch; everything restored stays in the sidebar.
         "tabs.startup" => matches!(value, "continue" | "new-tab" | "pages"),
@@ -320,6 +328,11 @@ pub fn value_allowed(key: &str, value: &str) -> bool {
         | "search.history"
         | "tabs.switch-to-open"
         | "tabs.automatic-pip"
+        | "panels.toolbar-navigation"
+        | "panels.toolbar-reload"
+        | "panels.toolbar-zoom"
+        | "panels.toolbar-layout"
+        | "panels.toolbar-close"
         | "time.track"
         | "performance.sleep"
         | "updates.auto-check"
@@ -595,6 +608,10 @@ mod tests {
         assert!(KEYS.contains(&"panels.strip"));
         assert!(value_allowed("panels.strip", "auto"));
         assert!(!value_allowed("panels.strip", "never"));
+        assert!(value_allowed("panels.toolbar", "top"));
+        assert!(!value_allowed("panels.toolbar", "left"));
+        assert!(value_allowed("panels.toolbar-zoom", "false"));
+        assert!(KEYS.contains(&"panels.toolbar-close"));
         assert!(!value_allowed("tabs.close-button", "never"));
     }
 

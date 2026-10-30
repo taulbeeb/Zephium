@@ -14,6 +14,7 @@
   } from "@hugeicons/core-free-icons";
   import type { WebPanelView } from "$shared/ipc/bindings";
   import { tabs } from "$domain/tabs";
+  import { preferences } from "$domain/preferences";
   import { favicons } from "$domain/favicons";
   import FavIcon from "$shared/ui/FavIcon";
   import IconButton from "$shared/ui/IconButton";
@@ -34,6 +35,10 @@
   } = $props();
 
   const panels = $derived(tabs.webPanels());
+  // Where the open panel's buttons stand, and which of them a person kept.
+  const toolbar = $derived(preferences.value("panels.toolbar"));
+  const shows = (group: "navigation" | "reload" | "zoom" | "layout" | "close") =>
+    preferences.value(`panels.toolbar-${group}`) !== "false";
   const open = $derived(tabs.openPanel());
   let dragged = $state<string | null>(null);
   let over = $state<string | null>(null);
@@ -74,7 +79,12 @@
   }
 </script>
 
-<nav class="strip" style:width={`${width}px`} aria-label={m.panels_strip_label()}>
+<nav
+  class="strip"
+  data-toolbar={toolbar}
+  style:width={`${width}px`}
+  aria-label={m.panels_strip_label()}
+>
   <ul class="sites">
     {#each panels as panel (panel.tab.id)}
       {@const container = tabs.containerOf(panel.tab)}
@@ -143,53 +153,55 @@
     </li>
   </ul>
 
-  {#if open}
+  {#if open && toolbar !== "hidden"}
     <div class="controls" role="toolbar" aria-label={m.panels_controls_label()}>
-      <IconButton
-        icon={ArrowLeft01Icon}
-        label={m.panels_back()}
-        disabled={!open.tab.can_go_back}
-        onclick={() => void tabs.navigatePanel(open.tab.id, "back")}
-      />
-      <IconButton
-        icon={ArrowRight01Icon}
-        label={m.panels_forward()}
-        disabled={!open.tab.can_go_forward}
-        onclick={() => void tabs.navigatePanel(open.tab.id, "forward")}
-      />
-      <IconButton
-        icon={ArrowReloadHorizontalIcon}
-        label={m.panels_reload()}
-        onclick={() => void tabs.navigatePanel(open.tab.id, "reload")}
-      />
-      <IconButton
-        icon={PlusSignIcon}
-        label={m.panels_zoom_in()}
-        onclick={() => void tabs.zoomPanel(open.tab.id, "in")}
-      />
-      <button
-        type="button"
-        class="zoom"
-        title={m.panels_zoom_reset()}
-        aria-label={m.panels_zoom_level({ percent: open.tab.zoom ?? 100 })}
-        onclick={() => void tabs.zoomPanel(open.tab.id, "reset")}>{open.tab.zoom ?? 100}%</button
-      >
-      <IconButton
-        icon={MinusSignIcon}
-        label={m.panels_zoom_out()}
-        onclick={() => void tabs.zoomPanel(open.tab.id, "out")}
-      />
+      {#if shows("navigation")}<IconButton
+          icon={ArrowLeft01Icon}
+          label={m.panels_back()}
+          disabled={!open.tab.can_go_back}
+          onclick={() => void tabs.navigatePanel(open.tab.id, "back")}
+        />
+        <IconButton
+          icon={ArrowRight01Icon}
+          label={m.panels_forward()}
+          disabled={!open.tab.can_go_forward}
+          onclick={() => void tabs.navigatePanel(open.tab.id, "forward")}
+        />{/if}
+      {#if shows("reload")}<IconButton
+          icon={ArrowReloadHorizontalIcon}
+          label={m.panels_reload()}
+          onclick={() => void tabs.navigatePanel(open.tab.id, "reload")}
+        />{/if}
+      {#if shows("zoom")}<IconButton
+          icon={PlusSignIcon}
+          label={m.panels_zoom_in()}
+          onclick={() => void tabs.zoomPanel(open.tab.id, "in")}
+        />
+        <button
+          type="button"
+          class="zoom"
+          title={m.panels_zoom_reset()}
+          aria-label={m.panels_zoom_level({ percent: open.tab.zoom ?? 100 })}
+          onclick={() => void tabs.zoomPanel(open.tab.id, "reset")}>{open.tab.zoom ?? 100}%</button
+        >
+        <IconButton
+          icon={MinusSignIcon}
+          label={m.panels_zoom_out()}
+          onclick={() => void tabs.zoomPanel(open.tab.id, "out")}
+        />{/if}
+      <!-- A floating panel's only edge the pointer can reach is this grip,
+           so it stays while any buttons do. -->
       {#if open.settings.floating}<PanelWidthGrip panel={open.tab.id} width={open.width} />{/if}
-      <IconButton
-        icon={open.settings.floating ? PinIcon : PinOffIcon}
-        label={open.settings.floating ? m.panels_dock() : m.panels_float()}
-        onclick={() => pin(open)}
-      />
-      <IconButton
-        icon={Cancel01Icon}
-        label={m.panels_close()}
-        onclick={() => void tabs.openPanelBeside(null)}
-      />
+      {#if shows("layout")}<IconButton
+          icon={open.settings.floating ? PinIcon : PinOffIcon}
+          label={open.settings.floating ? m.panels_dock() : m.panels_float()}
+          onclick={() => pin(open)}
+        />{/if}
+      {#if shows("close")}<IconButton
+          icon={Cancel01Icon}
+          label={m.panels_close()}
+          onclick={() => void tabs.openPanelBeside(null)}
+        />{/if}
     </div>
   {/if}
 </nav>
@@ -326,6 +338,18 @@
     flex-direction: column;
     align-items: center;
     gap: 2px;
+  }
+
+  /* Buttons at the top come first, set off from the icons below them. */
+  .strip[data-toolbar="top"] {
+    justify-content: flex-start;
+    gap: 10px;
+  }
+
+  .strip[data-toolbar="top"] .controls {
+    order: -1;
+    padding-block-end: 10px;
+    border-block-end: 1px solid var(--color-border);
   }
 
   @media (forced-colors: active) {

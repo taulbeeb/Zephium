@@ -21,7 +21,19 @@
   /></SettingsGroup
 >
 <SettingsGroup title={m.panels_group()}
-  ><PreferenceSelect id="panels.strip" preference="panels.strip" /></SettingsGroup
+  ><PreferenceSelect id="panels.strip" preference="panels.strip" /><PreferenceSelect
+    id="panels.toolbar"
+    preference="panels.toolbar"
+  /><PreferenceSwitch
+    id="panels.toolbar-navigation"
+    preference="panels.toolbar-navigation"
+  /><PreferenceSwitch
+    id="panels.toolbar-reload"
+    preference="panels.toolbar-reload"
+  /><PreferenceSwitch id="panels.toolbar-zoom" preference="panels.toolbar-zoom" /><PreferenceSwitch
+    id="panels.toolbar-layout"
+    preference="panels.toolbar-layout"
+  /><PreferenceSwitch id="panels.toolbar-close" preference="panels.toolbar-close" /></SettingsGroup
 >
 <SettingsGroup title={m.tabs_group_archive()}
   ><PreferenceSelect id="tabs.archive" preference="tabs.archive" /></SettingsGroup
