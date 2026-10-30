@@ -5,8 +5,30 @@
 //! persistent profile.
 
 use super::*;
-use crate::api::{PanelCommand, PanelNavigation};
-use zephium_core::panels::{MAX_PROFILE_PANELS, PANEL_STRIP_WIDTH};
+use crate::api::{PanelCommand, PanelNavigation, PanelZoom};
+use zephium_core::panels::{PanelSettings, MAX_PROFILE_PANELS, PANEL_STRIP_WIDTH};
+
+/// When each panel was last closed and last reloaded, for its timers.
+/// Runtime only: a relaunch starts every timer afresh.
+#[derive(Default)]
+pub(super) struct PanelTimers {
+    closed_at: std::collections::HashMap<ItemId, std::time::Instant>,
+    reloaded_at: std::collections::HashMap<ItemId, std::time::Instant>,
+}
+
+#[cfg(test)]
+impl PanelTimers {
+    /// Moves one panel's close and another's last reload into the past.
+    pub(super) fn age_for_test(
+        &mut self,
+        closed: ItemId,
+        reloaded: ItemId,
+        at: std::time::Instant,
+    ) {
+        self.closed_at.insert(closed, at);
+        self.reloaded_at.insert(reloaded, at);
+    }
+}
 
 fn rejected(reason: OperationReason) -> OperationDisposition {
     operation_result(OperationOutcome::Rejected, reason)
@@ -86,11 +108,52 @@ impl Shell {
                 if !self.panel_in_scope(id, profile) {
                     return rejected(OperationReason::InvalidScope);
                 }
+                if action == PanelNavigation::Reload {
+                    self.panel_timers
+                        .reloaded_at
+                        .insert(id, std::time::Instant::now());
+                }
                 match action {
                     PanelNavigation::Back => self.operation_history(id, false),
                     PanelNavigation::Forward => self.operation_history(id, true),
                     PanelNavigation::Reload => self.operation_reload(id),
                 }
+            }
+            PanelCommand::Configure { id, settings } => self.configure_panel(profile, id, settings),
+            PanelCommand::Zoom { id, step } => {
+                if !self.panel_in_scope(id, profile) {
+                    return rejected(OperationReason::InvalidScope);
+                }
+                self.adjust_zoom_of(
+                    id,
+                    match step {
+                        PanelZoom::In => ZoomStep::In,
+                        PanelZoom::Out => ZoomStep::Out,
+                        PanelZoom::Reset => ZoomStep::Reset,
+                    },
+                )
+            }
+            PanelCommand::MoveTab(tab) => {
+                let added = self.operation_panel(PanelCommand::AddTab(tab));
+                if added.outcome == OperationOutcome::Rejected {
+                    return added;
+                }
+                // The page reloads in the panel; the tab it came from goes.
+                let closed = self.operation_close(tab);
+                if closed.outcome == OperationOutcome::Rejected {
+                    return closed;
+                }
+                added
+            }
+            PanelCommand::Select(position) => {
+                let Some(id) = position
+                    .checked_sub(1)
+                    .and_then(|at| self.profile_panels(profile).get(at).copied())
+                else {
+                    return unchanged();
+                };
+                let target = (self.panels.open(profile) != Some(id)).then_some(id);
+                self.open_panel(profile, target)
             }
         }
     }
@@ -158,6 +221,7 @@ impl Shell {
             let _ = self.items.remove(id);
             return rejected(OperationReason::InvalidInput);
         }
+        self.engine.set_mobile_user_agent(id, false);
         self.open_panel(profile, Some(id))
     }
 
@@ -167,6 +231,9 @@ impl Shell {
         }
         self.panels.forget(id);
         self.panel_last.retain(|_, last| *last != id);
+        self.panel_timers.closed_at.remove(&id);
+        self.panel_timers.reloaded_at.remove(&id);
+        self.engine.set_mobile_user_agent(id, false);
         self.cancel_page_permission_for_item(id);
         self.forget_page_permission_documents_of_item(id);
         self.cancel_pending_presentation(id);
@@ -209,18 +276,151 @@ impl Shell {
         if id.is_some_and(|id| !self.panel_in_scope(id, profile)) {
             return rejected(OperationReason::InvalidScope);
         }
-        if let Some(previous) = self.panels.open(profile) {
+        let previous = self.panels.open(profile);
+        if let Some(previous) = previous {
             self.panel_last.insert(profile, previous);
         }
         if !self.panels.set_open(profile, id) {
             return unchanged();
         }
-        let effects = id.map(|id| self.items.ensure_view(id)).unwrap_or_default();
+        let now = std::time::Instant::now();
+        let mut effects = Vec::new();
+        if let Some(previous) = previous.filter(|previous| Some(*previous) != id) {
+            self.panel_timers.closed_at.insert(previous, now);
+            // A panel set to unload on close sleeps as soon as it goes.
+            if self.panels.settings(previous).unload_on_close {
+                self.cancel_discard_probe(previous);
+                effects.extend(self.items.hibernate(previous));
+            }
+        }
+        if let Some(id) = id {
+            self.panel_timers.closed_at.remove(&id);
+            if !self.items.tab(id).is_some_and(TabState::has_view) {
+                self.panel_timers.reloaded_at.insert(id, now);
+            }
+            effects.extend(self.items.ensure_view(id));
+        }
         let mut native = self.commit(effects);
         self.schedule_persist();
         self.project_items();
         native.record(self.relayout_with(true));
+        self.reschedule_panel_timers();
         mutation_result(native)
+    }
+
+    /// Replaces a panel's settings. A change of layout rebuilds a live page
+    /// so the site sees the new user agent from its first request.
+    fn configure_panel(
+        &mut self,
+        profile: ProfileId,
+        id: ItemId,
+        settings: PanelSettings,
+    ) -> OperationDisposition {
+        if !self.panel_in_scope(id, profile) {
+            return rejected(OperationReason::InvalidScope);
+        }
+        let was_mobile = self.panels.settings(id).mobile;
+        if !self.panels.set_settings(id, settings) {
+            return unchanged();
+        }
+        let mobile = self.panels.settings(id).mobile;
+        let mut effects = Vec::new();
+        if mobile != was_mobile {
+            self.engine.set_mobile_user_agent(id, mobile);
+            if self.items.tab(id).is_some_and(TabState::has_view) {
+                self.cancel_discard_probe(id);
+                effects.extend(self.items.hibernate(id));
+                if self.panels.open(profile) == Some(id) {
+                    effects.extend(self.items.ensure_view(id));
+                }
+            }
+        }
+        let mut native = self.commit(effects);
+        self.schedule_persist();
+        self.project_items();
+        native.record(self.relayout_with(false));
+        self.reschedule_panel_timers();
+        mutation_result(native)
+    }
+
+    pub(super) fn panel_wake(&mut self) {
+        let now = std::time::Instant::now();
+        let shown = self.shown_panel();
+        let mut effects = Vec::new();
+        let mut reloads = Vec::new();
+        for id in self.all_panels() {
+            let settings = self.panels.settings(id);
+            if !self.items.tab(id).is_some_and(TabState::has_view) {
+                continue;
+            }
+            if let (Some(minutes), Some(closed)) = (
+                settings.unload_after_minutes,
+                self.panel_timers.closed_at.get(&id).copied(),
+            ) {
+                let idle = std::time::Duration::from_secs(u64::from(minutes) * 60);
+                // A page making sound keeps playing in a closed panel.
+                let audible = self.items.tab(id).is_some_and(|tab| tab.audio.shown());
+                if shown != Some(id) && !audible && now >= closed + idle {
+                    self.panel_timers.closed_at.remove(&id);
+                    self.cancel_discard_probe(id);
+                    effects.extend(self.items.hibernate(id));
+                    continue;
+                }
+            }
+            if let Some(seconds) = settings.reload_every_seconds {
+                let every = std::time::Duration::from_secs(u64::from(seconds));
+                let last = *self.panel_timers.reloaded_at.entry(id).or_insert(now);
+                if now >= last + every {
+                    self.panel_timers.reloaded_at.insert(id, now);
+                    reloads.push(id);
+                }
+            }
+        }
+        let _ = self.commit(effects);
+        for id in reloads {
+            let _ = self.engine.reload(id);
+        }
+        self.reschedule_panel_timers();
+    }
+
+    /// Every panel of every persistent profile, which keep their timers
+    /// while another profile is in front.
+    fn all_panels(&self) -> Vec<ItemId> {
+        self.profiles
+            .iter()
+            .filter(|profile| profile.kind != ProfileKind::Incognito)
+            .flat_map(|profile| self.profile_panels(profile.id))
+            .collect()
+    }
+
+    /// Asks to be woken at the earliest panel timer due, or not at all.
+    pub(super) fn reschedule_panel_timers(&mut self) {
+        let now = std::time::Instant::now();
+        let shown = self.shown_panel();
+        let mut next: Option<std::time::Instant> = None;
+        let mut sooner = |at: std::time::Instant| {
+            next = Some(next.map_or(at, |next: std::time::Instant| next.min(at)));
+        };
+        for id in self.all_panels() {
+            if !self.items.tab(id).is_some_and(TabState::has_view) {
+                continue;
+            }
+            let settings = self.panels.settings(id);
+            if let (Some(minutes), Some(closed), false) = (
+                settings.unload_after_minutes,
+                self.panel_timers.closed_at.get(&id),
+                shown == Some(id),
+            ) {
+                sooner(*closed + std::time::Duration::from_secs(u64::from(minutes) * 60));
+            }
+            if let Some(seconds) = settings.reload_every_seconds {
+                let last = *self.panel_timers.reloaded_at.entry(id).or_insert(now);
+                sooner(last + std::time::Duration::from_secs(u64::from(seconds)));
+            }
+        }
+        if let Some(queue) = &self.self_queue {
+            queue.schedule_panels(next);
+        }
     }
 
     /// Moves a panel to another store by rebuilding its view: a live view is
@@ -257,10 +457,7 @@ impl Shell {
     /// The panel shown beside the page in the focused window right now.
     pub(super) fn shown_panel(&self) -> Option<ItemId> {
         let window = self.windows.focused()?;
-        if self.active_browser_page().is_some()
-            || self.window_filling_fullscreen().is_some()
-            || window.metrics.sidebar_hidden
-        {
+        if self.active_browser_page().is_some() || self.window_filling_fullscreen().is_some() {
             return None;
         }
         self.panels
@@ -272,13 +469,12 @@ impl Shell {
     /// layout of the window must use alike.
     pub(super) fn layout_metrics(&self, window: &zephium_core::windows::Window) -> layout::Metrics {
         let mut metrics = window.metrics;
-        // A hidden sidebar comes over the page as the chrome itself; chrome
-        // spanning the window for the strip would then cover the whole page.
-        // Panels wait until the sidebar is shown again.
-        if metrics.sidebar_hidden {
-            return metrics;
-        }
-        let strip = self.active_browser_page().is_none()
+        // A hidden sidebar comes over the page as the chrome itself, and
+        // chrome spanning the window for the strip would cover the whole
+        // page; the open panel stays docked, and the strip returns with the
+        // sidebar.
+        let strip = !metrics.sidebar_hidden
+            && self.active_browser_page().is_none()
             && self.panel_scope() == Some(window.profile)
             && !self.profile_panels(window.profile).is_empty();
         if strip {
@@ -299,29 +495,59 @@ impl Shell {
             .into_iter()
             .filter_map(|id| {
                 let tab = self.items.tab(id)?;
+                let settings = self.panels.settings(id);
                 Some(zephium_ipc::WebPanelView {
                     tab: self.generic_tab_view(id, tab, Some(profile)),
                     width: self.panels.width(id),
                     open: open == Some(id),
+                    settings: zephium_ipc::WebPanelSettingsView {
+                        name: settings.name,
+                        mobile: settings.mobile,
+                        load_on_startup: settings.load_on_startup,
+                        unload_on_close: settings.unload_on_close,
+                        unload_after_minutes: settings.unload_after_minutes,
+                        reload_every_seconds: settings.reload_every_seconds,
+                    },
                 })
             })
             .collect()
     }
 
-    /// Wakes the panel a profile had open when the session was saved.
+    /// Wakes the panel a profile had open when the session was saved, and
+    /// the panels set to load at startup; tells the engine which panels ask
+    /// for phone layouts before any of their views is built.
     pub(super) fn restore_open_panel(&mut self) {
-        let Some(id) = self.shown_panel() else {
-            return;
-        };
-        let effects = self.items.ensure_view(id);
+        let panels = self.all_panels();
+        for id in &panels {
+            if self.panels.settings(*id).mobile {
+                self.engine.set_mobile_user_agent(*id, true);
+            }
+        }
+        let focused = self.panel_scope();
+        let mut effects = Vec::new();
+        for id in panels {
+            let eager = self.panels.settings(id).load_on_startup
+                && focused.is_some_and(|profile| self.panel_in_scope(id, profile));
+            if eager || self.shown_panel() == Some(id) {
+                effects.extend(self.items.ensure_view(id));
+                if self.shown_panel() != Some(id) {
+                    self.panel_timers
+                        .closed_at
+                        .insert(id, std::time::Instant::now());
+                }
+            }
+        }
         let _ = self.commit(effects);
         let _ = self.relayout();
+        self.reschedule_panel_timers();
     }
 
     /// Forgets the panels of a deleted profile; the items go with its spaces.
     pub(super) fn forget_profile_panels(&mut self, profile: ProfileId) {
         for id in self.profile_panels(profile) {
             self.panels.forget(id);
+            self.panel_timers.closed_at.remove(&id);
+            self.panel_timers.reloaded_at.remove(&id);
         }
         self.panels.forget_profile(profile);
         self.panel_last.remove(&profile);

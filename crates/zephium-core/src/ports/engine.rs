@@ -763,6 +763,10 @@ pub trait Engine {
     ) {
         done(true);
     }
+    /// Asks sites in `id`'s future views for their phone layout, or the
+    /// desktop one again. It takes effect when the next view is built; the
+    /// shell rebuilds a live view to apply it.
+    fn set_mobile_user_agent(&self, _id: ItemId, _mobile: bool) {}
     /// Browser-owned file actions. Only trusted Shell admission supplies the
     /// profile partition; the caller supplies IDs, never filesystem paths.
     fn download_call(

@@ -630,6 +630,20 @@ pub struct WebPanelView {
     /// Points; the docked width when the window has room for it.
     pub width: u32,
     pub open: bool,
+    pub settings: WebPanelSettingsView,
+}
+
+/// What the person chose for one web panel.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct WebPanelSettingsView {
+    /// Shown instead of the page's title.
+    pub name: Option<String>,
+    /// Asks sites for their phone layout.
+    pub mobile: bool,
+    pub load_on_startup: bool,
+    pub unload_on_close: bool,
+    pub unload_after_minutes: Option<u32>,
+    pub reload_every_seconds: Option<u32>,
 }
 
 /// Where the open web panel is docked, in window coordinates.

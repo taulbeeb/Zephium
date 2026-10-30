@@ -91,6 +91,14 @@ impl WindowsConstructionSettlement {
 }
 
 impl EngineHost {
+    pub(crate) fn set_mobile_user_agent(&mut self, id: ItemId, mobile: bool) {
+        if mobile {
+            self.mobile_views.insert(id);
+        } else {
+            self.mobile_views.remove(&id);
+        }
+    }
+
     pub(crate) fn create_view(
         &mut self,
         id: ItemId,
@@ -165,7 +173,9 @@ impl EngineHost {
             return;
         }
         #[cfg(any(not(all(unix, not(target_os = "macos"))), test))]
-        if let Some(mut spare) = self.spare.take_if(|s| s.partition == partition) {
+        // A warm spare carries the desktop user agent.
+        let mobile = self.mobile_views.contains(&id);
+        if let Some(mut spare) = self.spare.take_if(|s| s.partition == partition && !mobile) {
             if let Err(error) = spare
                 .view
                 .native_resource
@@ -1384,9 +1394,18 @@ impl EngineHost {
                 !script.all_frames,
             );
         }
+        let mobile = self.mobile_views.contains(&id.get());
         #[cfg(target_os = "macos")]
         {
-            builder = builder.with_user_agent(crate::platform::imp::safari_user_agent());
+            builder = builder.with_user_agent(if mobile {
+                crate::platform::imp::mobile_safari_user_agent()
+            } else {
+                crate::platform::imp::safari_user_agent()
+            });
+        }
+        #[cfg(not(target_os = "macos"))]
+        if mobile {
+            builder = builder.with_user_agent(crate::MOBILE_USER_AGENT);
         }
 
         #[cfg(target_os = "windows")]

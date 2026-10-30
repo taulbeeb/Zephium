@@ -56,6 +56,11 @@ mod container_website_data;
 
 pub use haptics::{haptic, Haptic};
 
+/// The user agent a web panel asks for its phone layout with, where the
+/// engine has no platform's own.
+#[cfg(not(target_os = "macos"))]
+const MOBILE_USER_AGENT: &str = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36";
+
 /// Whether this platform gives a container's tabs their own website data
 /// store. Where it does not, container tabs are refused, never opened in the
 /// profile's own store.
@@ -2310,6 +2315,11 @@ impl Engine for WebviewEngine {
             |done| done(false),
             move |host, done| host.set_site_permission(profile, origin, kind, decision, done),
         );
+    }
+    fn set_mobile_user_agent(&self, id: ItemId, mobile: bool) {
+        let _ = self.run(move || {
+            let _ = host::try_with(move |host| host.set_mobile_user_agent(id, mobile));
+        });
     }
     fn set_page_style(&self, profile: ProfileId, site: String, css: Arc<str>) {
         let _ = self.run(move || {

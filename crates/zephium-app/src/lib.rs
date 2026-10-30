@@ -146,6 +146,7 @@ pub use api::{
     BookmarkCompletion, BrowsingDataCompletion, ContainerCommand, ExportCompletion,
     FaviconPageSource, FaviconProbe, FaviconProber, FaviconProberAttachment, HistoryCompletion,
     HistoryListCompletion, ImportCompletion, ImportDestination, ImportDestinationCompletion,
-    NoteCompletion, NotesAttachment, PageSource, PanelCommand, PanelNavigation, ResourceCompletion,
-    SourceCompletion, SpaceCommand, TabAction, TabCompletion, TimeCompletion, ZoomCompletion,
+    NoteCompletion, NotesAttachment, PageSource, PanelCommand, PanelNavigation, PanelZoom,
+    ResourceCompletion, SourceCompletion, SpaceCommand, TabAction, TabCompletion, TimeCompletion,
+    ZoomCompletion,
 };

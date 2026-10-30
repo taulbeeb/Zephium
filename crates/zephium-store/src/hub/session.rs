@@ -39,6 +39,40 @@ struct BoundedPanels {
     widths: Vec<BoundedPanelWidth>,
     #[serde(default, deserialize_with = "deserialize_bounded_open_panels")]
     open: Vec<BoundedOpenPanel>,
+    #[serde(default, deserialize_with = "deserialize_bounded_panel_settings")]
+    settings: Vec<BoundedPanelSettings>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BoundedPanelSettings {
+    item: ItemId,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    mobile: bool,
+    #[serde(default)]
+    load_on_startup: bool,
+    #[serde(default)]
+    unload_on_close: bool,
+    #[serde(default)]
+    unload_after_minutes: Option<u32>,
+    #[serde(default)]
+    reload_every_seconds: Option<u32>,
+}
+
+fn deserialize_bounded_panel_settings<'de, D>(
+    deserializer: D,
+) -> Result<Vec<BoundedPanelSettings>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    bounded_json::deserialize_bounded_vec(deserializer, MAX_SESSION_ITEMS, |entry| {
+        entry
+            .name
+            .as_ref()
+            .is_none_or(|name| name.len() <= MAX_NAME_BYTES)
+    })
 }
 
 #[derive(serde::Deserialize)]
@@ -390,6 +424,22 @@ impl BoundedSessionState {
                 })
                 .collect(),
             panels: zephium_core::session::PersistedPanels {
+                settings: self
+                    .panels
+                    .settings
+                    .into_iter()
+                    .map(|entry| zephium_core::session::PersistedPanelSettings {
+                        item: entry.item,
+                        settings: zephium_core::panels::PanelSettings {
+                            name: entry.name,
+                            mobile: entry.mobile,
+                            load_on_startup: entry.load_on_startup,
+                            unload_on_close: entry.unload_on_close,
+                            unload_after_minutes: entry.unload_after_minutes,
+                            reload_every_seconds: entry.reload_every_seconds,
+                        },
+                    })
+                    .collect(),
                 widths: self
                     .panels
                     .widths
@@ -1986,6 +2036,14 @@ mod closed_session_wire_tests {
                 },
             }],
             panels: PersistedPanels {
+                settings: vec![zephium_core::session::PersistedPanelSettings {
+                    item: panel,
+                    settings: zephium_core::panels::PanelSettings {
+                        name: Some("Chat".into()),
+                        unload_after_minutes: Some(15),
+                        ..Default::default()
+                    },
+                }],
                 widths: vec![PersistedPanelWidth {
                     item: panel,
                     width: 480,

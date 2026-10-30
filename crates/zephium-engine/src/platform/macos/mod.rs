@@ -376,6 +376,19 @@ pub(crate) fn safari_user_agent() -> &'static str {
     })
 }
 
+/// Safari on an iPhone, at the installed Safari's version, for pages a web
+/// panel asks for in their phone layout.
+pub(crate) fn mobile_safari_user_agent() -> &'static str {
+    static USER_AGENT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    USER_AGENT.get_or_init(|| {
+        let version = installed_safari_version().unwrap_or_else(|| "26.0".into());
+        let os = version.replace('.', "_");
+        format!(
+            "Mozilla/5.0 (iPhone; CPU iPhone OS {os} like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/{version} Mobile/15E148 Safari/604.1"
+        )
+    })
+}
+
 fn installed_safari_version() -> Option<String> {
     use objc2_foundation::{ns_string, NSBundle, NSString};
     let bundle = NSBundle::bundleWithPath(ns_string!("/Applications/Safari.app"))?;

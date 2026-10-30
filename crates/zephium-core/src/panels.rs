@@ -27,10 +27,77 @@ pub fn clamp_panel_width(width: f64) -> u32 {
         .clamp(f64::from(MIN_PANEL_WIDTH), f64::from(MAX_PANEL_WIDTH)) as u32
 }
 
+pub const MAX_PANEL_NAME_CHARS: usize = 64;
+/// An unload timer puts a closed panel to sleep after this many idle minutes.
+pub const MIN_UNLOAD_AFTER_MINUTES: u32 = 1;
+pub const MAX_UNLOAD_AFTER_MINUTES: u32 = 24 * 60;
+/// An auto-reload timer reloads an awake panel this often, in seconds.
+pub const MIN_RELOAD_EVERY_SECONDS: u32 = 30;
+pub const MAX_RELOAD_EVERY_SECONDS: u32 = 24 * 60 * 60;
+
+/// What a person chose for one panel. The default is a panel that loads
+/// when first opened, stays awake until the lifecycle needs its memory,
+/// and asks for the desktop site.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct PanelSettings {
+    /// Shown instead of the page's title; none follows the page.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Ask sites for their phone layout, which fits a narrow panel.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub mobile: bool,
+    /// Load when the browser starts, not only when first opened.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub load_on_startup: bool,
+    /// Put the page to sleep as soon as the panel is closed.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub unload_on_close: bool,
+    /// Put a closed panel's page to sleep after this many idle minutes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unload_after_minutes: Option<u32>,
+    /// Reload the page this often while it is awake.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reload_every_seconds: Option<u32>,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
+impl PanelSettings {
+    pub fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// The settings as they are kept: a bounded name stripped of controls
+    /// (none when nothing is left), and timers inside their ranges.
+    pub fn sanitized(self) -> Self {
+        let name = self.name.and_then(|name| {
+            let name: String = crate::session::bounded_name(name.trim(), "")
+                .chars()
+                .take(MAX_PANEL_NAME_CHARS)
+                .collect();
+            let name = name.trim().to_owned();
+            (!name.is_empty()).then_some(name)
+        });
+        Self {
+            name,
+            unload_after_minutes: self
+                .unload_after_minutes
+                .map(|m| m.clamp(MIN_UNLOAD_AFTER_MINUTES, MAX_UNLOAD_AFTER_MINUTES)),
+            reload_every_seconds: self
+                .reload_every_seconds
+                .map(|s| s.clamp(MIN_RELOAD_EVERY_SECONDS, MAX_RELOAD_EVERY_SECONDS)),
+            ..self
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Panels {
     widths: HashMap<ItemId, u32>,
     open: HashMap<ProfileId, ItemId>,
+    settings: HashMap<ItemId, PanelSettings>,
 }
 
 impl Panels {
@@ -73,9 +140,30 @@ impl Panels {
         }
     }
 
-    /// Forgets a removed panel: its width, and being open anywhere.
+    /// A panel's settings; the default for one never configured.
+    pub fn settings(&self, panel: ItemId) -> PanelSettings {
+        self.settings.get(&panel).cloned().unwrap_or_default()
+    }
+
+    /// Stores settings, sanitized; the default is not kept. Returns whether
+    /// they changed.
+    pub fn set_settings(&mut self, panel: ItemId, settings: PanelSettings) -> bool {
+        let settings = settings.sanitized();
+        if settings.is_default() {
+            return self.settings.remove(&panel).is_some();
+        }
+        self.settings.insert(panel, settings.clone()) != Some(settings)
+    }
+
+    /// Settings that differ from the default, for persistence.
+    pub fn configured(&self) -> impl Iterator<Item = (ItemId, &PanelSettings)> + '_ {
+        self.settings.iter().map(|(id, settings)| (*id, settings))
+    }
+
+    /// Forgets a removed panel: its width, its settings, and being open.
     pub fn forget(&mut self, panel: ItemId) {
         self.widths.remove(&panel);
+        self.settings.remove(&panel);
         self.open.retain(|_, open| *open != panel);
     }
 
@@ -103,6 +191,42 @@ mod tests {
         assert!(panels.set_width(id, f64::NAN));
         assert_eq!(panels.widths().count(), 0);
         assert_eq!(clamp_panel_width(512.4), 512);
+    }
+
+    #[test]
+    fn settings_are_sanitized_and_the_default_is_not_stored() {
+        let mut panels = Panels::default();
+        let id = ItemId::from(1);
+        assert!(panels.set_settings(
+            id,
+            PanelSettings {
+                name: Some("  Team\u{202e} Chat \n".into()),
+                unload_after_minutes: Some(0),
+                reload_every_seconds: Some(5),
+                ..PanelSettings::default()
+            },
+        ));
+        let kept = panels.settings(id);
+        assert_eq!(kept.name.as_deref(), Some("Team Chat"));
+        assert_eq!(kept.unload_after_minutes, Some(MIN_UNLOAD_AFTER_MINUTES));
+        assert_eq!(kept.reload_every_seconds, Some(MIN_RELOAD_EVERY_SECONDS));
+        assert!(panels.set_settings(
+            id,
+            PanelSettings {
+                name: Some("   ".into()),
+                ..PanelSettings::default()
+            },
+        ));
+        assert_eq!(panels.configured().count(), 0);
+        panels.set_settings(
+            id,
+            PanelSettings {
+                mobile: true,
+                ..PanelSettings::default()
+            },
+        );
+        panels.forget(id);
+        assert!(panels.settings(id).is_default());
     }
 
     #[test]

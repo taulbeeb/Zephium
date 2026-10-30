@@ -1031,6 +1031,12 @@ impl Shell {
                 },
             ),
             "panels.toggle" => self.operation_panel(crate::PanelCommand::Toggle),
+            id if id.starts_with("panels.select.") => {
+                id["panels.select.".len()..].parse::<usize>().map_or_else(
+                    |_| operation_result(OperationOutcome::Rejected, OperationReason::InvalidInput),
+                    |position| self.operation_panel(crate::PanelCommand::Select(position)),
+                )
+            }
             "space.next" => self.operation_space(crate::SpaceCommand::Step(1)),
             "space.previous" => self.operation_space(crate::SpaceCommand::Step(-1)),
             id if id.starts_with("space.select.") => id["space.select.".len()..]

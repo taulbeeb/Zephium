@@ -38,12 +38,21 @@ function snapshot(value: number, tabs: TabView[], active: string | null): ItemsS
   };
 }
 
+const noSettings = {
+  name: null,
+  mobile: false,
+  load_on_startup: false,
+  unload_on_close: false,
+  unload_after_minutes: null,
+  reload_every_seconds: null,
+};
+
 describe("web panels", () => {
   it("a panel's page changes land on the panel and never join the tabs", () => {
     const model = new TabProjectionModel();
     model.applySnapshot({
       ...snapshot(3, [tab("a", 1)], "a"),
-      web_panels: [{ tab: tab("p", 2), width: 400, open: true }],
+      web_panels: [{ tab: tab("p", 2), width: 400, open: true, settings: noSettings }],
     });
     expect(model.applyTab(tab("p", 5, { title: "Chat (3)" }))).toBe(true);
     expect(model.value.web_panels?.[0]?.tab.title).toBe("Chat (3)");
@@ -57,7 +66,7 @@ describe("web panels", () => {
     const model = new TabProjectionModel();
     model.applySnapshot({
       ...snapshot(3, [tab("a", 1)], "a"),
-      web_panels: [{ tab: tab("p", 2), width: 400, open: true }],
+      web_panels: [{ tab: tab("p", 2), width: 400, open: true, settings: noSettings }],
     });
     model.applyPresentation({ tab: tab("p", 6, { url: "https://chat.example/x" }), active: "a" });
     expect(model.value.active).toBe("a");

@@ -7,6 +7,8 @@
     Cancel01Icon,
     Globe02Icon,
     ArrowReloadHorizontalIcon,
+    MinusSignIcon,
+    PlusSignIcon,
   } from "@hugeicons/core-free-icons";
   import type { WebPanelView } from "$shared/ipc/bindings";
   import { tabs } from "$domain/tabs";
@@ -14,6 +16,7 @@
   import FavIcon from "$shared/ui/FavIcon";
   import IconButton from "$shared/ui/IconButton";
   import { containerHue } from "$shared/lib/container-hue";
+  import { badgeText, unreadCount } from "../lib/badge";
 
   let {
     width,
@@ -35,8 +38,10 @@
   // carries no tab sentinels for native to check against.
   const nameOf = (panel: WebPanelView) => {
     const container = tabs.containerOf(panel.tab);
-    const title = panel.tab.title || m.untitled_tab();
-    return container ? m.tab_in_container({ title, container: container.name }) : title;
+    const title = panel.settings.name || panel.tab.title || m.untitled_tab();
+    const named = container ? m.tab_in_container({ title, container: container.name }) : title;
+    const unread = unreadCount(panel.tab.title);
+    return unread > 0 ? m.panels_unread({ name: named, count: unread }) : named;
   };
 
   function choose(panel: WebPanelView) {
@@ -104,6 +109,9 @@
             notched={!!panel.tab.audio}
           />
           {#if panel.tab.audio}<span class="audio" aria-hidden="true"></span>{/if}
+          {#if unreadCount(panel.tab.title) > 0}<span class="badge" aria-hidden="true"
+              >{badgeText(unreadCount(panel.tab.title))}</span
+            >{/if}
         </button>
       </li>
     {/each}
@@ -137,6 +145,23 @@
         icon={ArrowReloadHorizontalIcon}
         label={m.panels_reload()}
         onclick={() => void tabs.navigatePanel(open.tab.id, "reload")}
+      />
+      <IconButton
+        icon={PlusSignIcon}
+        label={m.panels_zoom_in()}
+        onclick={() => void tabs.zoomPanel(open.tab.id, "in")}
+      />
+      <button
+        type="button"
+        class="zoom"
+        title={m.panels_zoom_reset()}
+        aria-label={m.panels_zoom_level({ percent: open.tab.zoom ?? 100 })}
+        onclick={() => void tabs.zoomPanel(open.tab.id, "reset")}>{open.tab.zoom ?? 100}%</button
+      >
+      <IconButton
+        icon={MinusSignIcon}
+        label={m.panels_zoom_out()}
+        onclick={() => void tabs.zoomPanel(open.tab.id, "out")}
       />
       <IconButton
         icon={Cancel01Icon}
@@ -238,6 +263,42 @@
     background: var(--color-accent);
   }
 
+  .badge {
+    position: absolute;
+    inset-block-start: -4px;
+    inset-inline-end: -5px;
+    min-inline-size: 16px;
+    block-size: 16px;
+    padding-inline: 4px;
+    box-sizing: border-box;
+    border-radius: var(--radius-capsule);
+    background: var(--color-danger);
+    color: var(--color-on-accent);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 16px;
+    text-align: center;
+  }
+
+  .zoom {
+    inline-size: 40px;
+    block-size: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-inset);
+    background: transparent;
+    color: var(--color-muted);
+    font: inherit;
+    font-size: var(--text-caption);
+    font-variant-numeric: tabular-nums;
+    cursor: default;
+  }
+
+  .zoom:hover {
+    background: var(--row-hover);
+    color: var(--color-text);
+  }
+
   .controls {
     display: flex;
     flex-direction: column;
@@ -251,8 +312,10 @@
       outline: 2px solid CanvasText;
     }
 
-    .audio {
+    .audio,
+    .badge {
       background: CanvasText;
+      color: Canvas;
     }
   }
 </style>

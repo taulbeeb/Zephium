@@ -22,6 +22,7 @@ enum CoalescedKey {
     Bootstrap,
     FocusWake,
     AudioWake,
+    PanelWake,
     Title(ItemId),
     Url(ItemId),
     Loading(ItemId),
@@ -163,6 +164,7 @@ pub(crate) struct TimerState {
     pub(crate) persist_deadline: Option<std::time::Instant>,
     focus_deadline: Option<std::time::Instant>,
     audio_deadline: Option<std::time::Instant>,
+    panel_deadline: Option<std::time::Instant>,
     favicon_deadlines: std::collections::HashMap<ItemId, (std::time::Instant, u8)>,
     pub(crate) presentation_deadlines: std::collections::HashMap<ItemId, PresentationDeadline>,
     discard_deadlines: std::collections::HashMap<ItemId, (std::time::Instant, DiscardProbeId)>,
@@ -192,6 +194,7 @@ pub(crate) enum TimerWake {
     Persist,
     Focus,
     Audio,
+    Panel,
     Favicon {
         id: ItemId,
         attempt: u8,
@@ -565,6 +568,7 @@ impl CommandQueue {
         timer.persist_deadline = None;
         timer.focus_deadline = None;
         timer.audio_deadline = None;
+        timer.panel_deadline = None;
         timer.favicon_deadlines.clear();
         timer.presentation_deadlines.clear();
         timer.discard_deadlines.clear();
@@ -602,6 +606,24 @@ impl CommandQueue {
         }
         timer.focus_deadline = deadline;
         self.inner.timer_ready.notify_one();
+    }
+
+    /// Wakes the shell when a web panel's next timer is due: an idle panel
+    /// to put to sleep or an awake one to reload. The shell sets the whole
+    /// deadline each time it reschedules, so a later one may replace it.
+    pub(crate) fn schedule_panels(&self, deadline: Option<std::time::Instant>) {
+        let mut timer = self
+            .inner
+            .timer_state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if timer.stopped {
+            return;
+        }
+        if timer.panel_deadline != deadline {
+            timer.panel_deadline = deadline;
+            self.inner.timer_ready.notify_one();
+        }
     }
 
     /// Wakes the shell when the earliest quiet tab's speaker is due to go.
@@ -977,6 +999,10 @@ impl CommandQueue {
                 timer.audio_deadline = None;
                 return TimerWake::Audio;
             }
+            if timer.panel_deadline.is_some_and(|deadline| now >= deadline) {
+                timer.panel_deadline = None;
+                return TimerWake::Panel;
+            }
             let next_favicon = timer
                 .favicon_deadlines
                 .iter()
@@ -1085,6 +1111,9 @@ impl CommandQueue {
             }
             if let Some(audio) = timer.audio_deadline {
                 deadline = deadline.min(audio);
+            }
+            if let Some(panel) = timer.panel_deadline {
+                deadline = deadline.min(panel);
             }
             if let Some((_, favicon, _)) = next_favicon {
                 deadline = deadline.min(favicon);
@@ -1328,6 +1357,7 @@ fn command_coalesced_key(command: &Command) -> Option<CoalescedKey> {
         Command::Persist => Some(CoalescedKey::Persist),
         Command::FocusWake => Some(CoalescedKey::FocusWake),
         Command::AudioWake => Some(CoalescedKey::AudioWake),
+        Command::PanelWake => Some(CoalescedKey::PanelWake),
         Command::Tick => Some(CoalescedKey::Tick),
         _ => None,
     }

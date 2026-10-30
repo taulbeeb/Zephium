@@ -1,12 +1,34 @@
 //! Web panels from privileged chrome and the tab menu.
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 
-use zephium_app::{Command, Handle, PanelCommand, PanelNavigation};
+use zephium_app::{Command, Handle, PanelCommand, PanelNavigation, PanelZoom};
 use zephium_core::ids::{ContainerId, ItemId};
 use zephium_ipc::OperationAdmission;
 
 /// "Add Page to Panels" on the tab menu.
 pub(crate) const TAB_MENU_ADD: &str = "panel.add";
+/// "Move Tab to Panels" on the tab menu.
+pub(crate) const TAB_MENU_MOVE: &str = "panel.move";
+
+#[derive(Clone, Copy, Debug, serde::Deserialize, specta::Type)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum PanelZoomV1 {
+    In,
+    Out,
+    Reset,
+}
+
+/// What the person chose for one panel, as chrome sends it. The shell
+/// sanitizes the name and timers.
+#[derive(Clone, Debug, serde::Deserialize, specta::Type)]
+pub(crate) struct PanelSettingsInputV1 {
+    name: Option<String>,
+    mobile: bool,
+    load_on_startup: bool,
+    unload_on_close: bool,
+    unload_after_minutes: Option<u32>,
+    reload_every_seconds: Option<u32>,
+}
 
 #[derive(Clone, Copy, Debug, serde::Deserialize, specta::Type)]
 #[serde(rename_all = "snake_case")]
@@ -199,6 +221,66 @@ pub(crate) fn panels_navigate(
             &shell,
             PanelCommand::Navigate { id, action },
         ),
+        None => super::rejected_operation(),
+    }
+}
+
+/// Replaces a panel's name, lifecycle timers and layout choice.
+#[tauri::command]
+#[specta::specta]
+pub(crate) fn panels_configure(
+    caller: WebviewWindow,
+    shell: State<'_, Handle>,
+    panel: String,
+    settings: PanelSettingsInputV1,
+) -> OperationAdmission {
+    let name_ok = settings
+        .name
+        .as_deref()
+        .is_none_or(|name| super::bounded(name, super::MAX_PROFILE_NAME_BYTES));
+    match panel_of(&panel).filter(|_| admitted(&caller, "panels_configure") && name_ok) {
+        Some(id) => dispatch(
+            caller.app_handle(),
+            &shell,
+            PanelCommand::Configure {
+                id,
+                settings: zephium_core::panels::PanelSettings {
+                    name: settings.name,
+                    mobile: settings.mobile,
+                    load_on_startup: settings.load_on_startup,
+                    unload_on_close: settings.unload_on_close,
+                    unload_after_minutes: settings.unload_after_minutes,
+                    reload_every_seconds: settings.reload_every_seconds,
+                },
+            },
+        ),
+        None => super::rejected_operation(),
+    }
+}
+
+#[tauri::command]
+#[specta::specta]
+pub(crate) fn panels_zoom(
+    caller: WebviewWindow,
+    shell: State<'_, Handle>,
+    panel: String,
+    step: PanelZoomV1,
+) -> OperationAdmission {
+    let step = match step {
+        PanelZoomV1::In => PanelZoom::In,
+        PanelZoomV1::Out => PanelZoom::Out,
+        PanelZoomV1::Reset => PanelZoom::Reset,
+    };
+    match panel_of(&panel).filter(|_| admitted(&caller, "panels_zoom")) {
+        Some(id) => dispatch(caller.app_handle(), &shell, PanelCommand::Zoom { id, step }),
+        None => super::rejected_operation(),
+    }
+}
+
+/// The tab menu's "Move Tab to Panels": the page moves, the tab closes.
+pub(crate) fn move_tab(app: &AppHandle, tab: ItemId) -> OperationAdmission {
+    match app.try_state::<Handle>() {
+        Some(shell) => dispatch(app, &shell, PanelCommand::MoveTab(tab)),
         None => super::rejected_operation(),
     }
 }

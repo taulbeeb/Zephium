@@ -16,7 +16,13 @@
   import RenderBoundary from "$shared/ui/RenderBoundary";
   import { loadClearSiteData, loadSettings } from "$features/settings";
   import { EssentialTile } from "$features/essentials";
-  import { AddressField, SiteDetails, SiteHead, findInPage } from "$features/address";
+  import {
+    AddressField,
+    SiteDetails,
+    SiteHead,
+    findInPage,
+    loadPageRequestCard,
+  } from "$features/address";
   import { SidebarPagePermission } from "$features/permissions";
   import { Dock } from "$features/dock";
   import { DownloadPulse, DownloadStatus } from "$features/downloads";
@@ -273,6 +279,12 @@
   // While the profile has panels the chrome spans the window: the stage
   // ends where the open panel, or else the strip, begins.
   let innerWidth = $state(0);
+  // A blocked pop-up, a link for another app or a sign-in from the open
+  // panel: the strip cannot hold its question, so the sidebar asks it.
+  let panelRequest = $derived.by(() => {
+    const panel = tabs.openPanel();
+    return panel?.tab.page_request ? { tab: panel.tab.id, request: panel.tab.page_request } : null;
+  });
   let panelPlace = $derived(layout.webPanel());
   let stageInset = $derived(
     panelPlace === null
@@ -403,6 +415,13 @@
             </AddressField>
             <!-- Work floats its page over the whole window, sidebar included. -->
             {#if !inWork}<SidebarPagePermission />{/if}
+            {#if !inWork && panelRequest}{#await loadPageRequestCard() then { default: RequestCard }}<section
+                  class="panel-request"
+                  aria-label={m.panels_web_request()}
+                >
+                  <p class="panel-request-head">{m.panels_web_request()}</p>
+                  <RequestCard tab={panelRequest.tab} request={panelRequest.request} />
+                </section>{/await}{/if}
 
             <HidingBar />
             {#if splitting}<p class="shrink-0 px-3 pb-1 text-[12px] text-accent" aria-live="polite">
@@ -677,6 +696,18 @@
 {#if ClearSiteData}<ClearSiteData />{/if}
 
 <style>
+  .panel-request {
+    margin-block: 4px 8px;
+  }
+
+  .panel-request-head {
+    margin: 0 0 4px;
+    padding-inline: 10px;
+    color: var(--color-muted);
+    font-size: var(--text-caption);
+    font-weight: 550;
+  }
+
   .stage-column {
     display: flex;
     flex: 1;

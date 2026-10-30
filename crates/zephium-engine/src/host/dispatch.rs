@@ -417,6 +417,7 @@ pub(crate) fn install(
             native_resource_accounting_failed: false,
             navigation_snapshots: HashMap::new(),
             partitions: HashMap::new(),
+            mobile_views: Default::default(),
             profile_persistence_classes: HashMap::new(),
             content_policies: HashMap::new(),
             style_worker: None,

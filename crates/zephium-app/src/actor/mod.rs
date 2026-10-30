@@ -1655,6 +1655,13 @@ fn spawn_suspended_with_worker_spawner<Agent: PendingAgentLifecycle>(
                     ),
                     Err(TryPushError::Closed(_)) => break,
                 },
+                TimerWake::Panel => match timer_queue.try_push(Command::PanelWake) {
+                    Ok(()) | Err(TryPushError::Sealed(_)) => {}
+                    Err(TryPushError::Full(_)) => timer_queue.schedule_panels(Some(
+                        std::time::Instant::now() + std::time::Duration::from_millis(25),
+                    )),
+                    Err(TryPushError::Closed(_)) => break,
+                },
                 TimerWake::Persist => match timer_queue.try_push(Command::Persist) {
                     Ok(()) | Err(TryPushError::Sealed(_)) => {}
                     Err(TryPushError::Full(_)) => timer_queue.schedule_persist(

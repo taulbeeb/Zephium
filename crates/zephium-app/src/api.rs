@@ -321,6 +321,20 @@ pub enum PanelCommand {
         id: ItemId,
         action: PanelNavigation,
     },
+    /// Replaces the panel's name, lifecycle timers and layout choice.
+    Configure {
+        id: ItemId,
+        settings: zephium_core::panels::PanelSettings,
+    },
+    Zoom {
+        id: ItemId,
+        step: PanelZoom,
+    },
+    /// The tab's page as a new panel, and the tab closes.
+    MoveTab(ItemId),
+    /// Shows the profile's panel at this place in the strip, from 1, or
+    /// closes it when it is the one open.
+    Select(usize),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -328,6 +342,13 @@ pub enum PanelNavigation {
     Back,
     Forward,
     Reload,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PanelZoom {
+    In,
+    Out,
+    Reset,
 }
 
 /// What the person chose for a page's request to open another application
@@ -427,6 +448,8 @@ pub enum Command {
     FocusWake,
     /// A quiet tab's speaker is due to go.
     AudioWake,
+    /// A web panel's unload or reload timer is due.
+    PanelWake,
     /// Captures one persistent destination before any source reads begin,
     /// restoring the session first for onboarding.
     ImportDestination {

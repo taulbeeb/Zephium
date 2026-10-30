@@ -73,6 +73,8 @@ export function commandTitle(entry: Pick<KeymapEntry, "id" | "title">): string {
   if (position) return m.command_tab_select({ number: position });
   const space = /^space\.select\.(\d)$/u.exec(entry.id)?.[1];
   if (space) return m.command_space_select({ number: space });
+  const panel = /^panels\.select\.(\d)$/u.exec(entry.id)?.[1];
+  if (panel) return m.command_panels_select({ number: panel });
   return TITLES[entry.id]?.() ?? entry.title;
 }
 

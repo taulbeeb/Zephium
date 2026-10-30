@@ -121,7 +121,7 @@ impl Shell {
         request: u32,
         credentials: Option<HttpCredentials>,
     ) -> OperationDisposition {
-        if !self.item_in_focused_scope(id) {
+        if !self.item_in_focused_scope(id) && !self.panel_in_focused_scope(id) {
             return operation_result(OperationOutcome::Rejected, OperationReason::InvalidScope);
         }
         if self.http_auth_prompt(id) != Some(request) {
@@ -143,7 +143,7 @@ impl Shell {
         id: ItemId,
         decision: PageRequestDecision,
     ) -> OperationDisposition {
-        if !self.item_in_focused_scope(id) {
+        if !self.item_in_focused_scope(id) && !self.panel_in_focused_scope(id) {
             return operation_result(OperationOutcome::Rejected, OperationReason::InvalidScope);
         }
         let Some(request) = self.items.take_page_request(id) else {

@@ -6,6 +6,8 @@ import type {
   ItemsState,
   SpaceLookInputV1,
   PanelNavigationV1,
+  PanelSettingsInputV1,
+  PanelZoomV1,
   TabMenuContext,
   TabView,
   WebPanelView,
@@ -284,6 +286,9 @@ export const setPanelContainer = (id: string, container: string | null) =>
 export const loadPanel = (id: string, input: string) => settle(commands.panelsLoad(id, input));
 export const navigatePanel = (id: string, action: PanelNavigationV1) =>
   settle(commands.panelsNavigate(id, action));
+export const configurePanel = (id: string, settings: PanelSettingsInputV1) =>
+  settle(commands.panelsConfigure(id, settings));
+export const zoomPanel = (id: string, step: PanelZoomV1) => settle(commands.panelsZoom(id, step));
 /** The container a space's new tabs open in, or none with null. */
 export const setSpaceDefault = (space: string, container: string | null) =>
   settle(commands.containersSetSpaceDefault(space, container));

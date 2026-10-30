@@ -1811,6 +1811,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             panels::panels_set_container,
             panels::panels_load,
             panels::panels_navigate,
+            panels::panels_configure,
+            panels::panels_zoom,
             operation_status,
             operations_reconcile,
             operation_acknowledge,
@@ -3984,6 +3986,7 @@ fn execute_tab_menu_action(
         ),
         "unkeep" => dispatch_operation(app, &shell, keep(false)),
         panels::TAB_MENU_ADD => panels::add_tab(app, id),
+        panels::TAB_MENU_MOVE => panels::move_tab(app, id),
         "split" => dispatch_operation(
             app,
             &shell,
@@ -6095,6 +6098,12 @@ fn build_tab_menu(
     )
     .enabled(context.page)
     .build(handle)?;
+    let move_panel = MenuItemBuilder::with_id(
+        format!("tabmenu.{}", panels::TAB_MENU_MOVE),
+        menu_text::label("Move Tab to Panels"),
+    )
+    .enabled(context.page)
+    .build(handle)?;
     let mute = if !zephium_engine::page_mute_supported() {
         None
     } else if context.muted {
@@ -6134,6 +6143,7 @@ fn build_tab_menu(
         &keep,
         &split,
         &add_panel,
+        &move_panel,
     ];
     if let Some(move_to) = &move_to {
         items.push(move_to);

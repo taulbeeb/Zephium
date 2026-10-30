@@ -592,6 +592,9 @@ impl Engine for FakeEngine {
         *self.runtime_security_advisories.lock().unwrap()
     }
 
+    fn set_mobile_user_agent(&self, id: ItemId, mobile: bool) {
+        self.log(format!("mobile {id} {mobile}"));
+    }
     fn retain_container_data(
         &self,
         profile: ProfileId,

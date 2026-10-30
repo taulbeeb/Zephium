@@ -227,6 +227,7 @@ pub struct Shell {
     panels: zephium_core::panels::Panels,
     /// The panel each profile had open last, for the toggle. Runtime only.
     panel_last: std::collections::HashMap<ProfileId, ItemId>,
+    panel_timers: panels::PanelTimers,
     spaces: Spaces,
     items: Items,
     recently_closed: Vec<zephium_core::session::PersistedClosedTab>,
@@ -474,6 +475,7 @@ impl Shell {
             containers: Default::default(),
             panels: Default::default(),
             panel_last: Default::default(),
+            panel_timers: Default::default(),
             spaces: Spaces::default(),
             items: Items::default(),
             recently_closed: Vec::new(),
@@ -1454,6 +1456,7 @@ impl Shell {
             Command::SetMemoryPressure(pressure) => self.on_memory_pressure(pressure),
             Command::FocusWake => self.focus_wake(),
             Command::AudioWake => self.audio_wake(),
+            Command::PanelWake => self.panel_wake(),
             // Accepted only through `Command::Operation`.
             Command::Focus(_) => {}
         }

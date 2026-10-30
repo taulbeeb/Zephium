@@ -352,7 +352,8 @@ impl Shell {
             && self.windows.focused().is_some_and(|window| {
                 window.profile == profile
                     && match self.active_browser_page() {
-                        None => window.active == Some(item),
+                        // The open panel is in front beside the active tab.
+                        None => window.active == Some(item) || self.shown_panel() == Some(item),
                         Some(_) => self.work_pane_shows(item),
                     }
             })

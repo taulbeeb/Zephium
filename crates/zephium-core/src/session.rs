@@ -56,12 +56,21 @@ pub struct PersistedPanels {
     pub widths: Vec<PersistedPanelWidth>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub open: Vec<PersistedOpenPanel>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub settings: Vec<PersistedPanelSettings>,
 }
 
 impl PersistedPanels {
     pub fn is_empty(&self) -> bool {
-        self.widths.is_empty() && self.open.is_empty()
+        self.widths.is_empty() && self.open.is_empty() && self.settings.is_empty()
     }
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct PersistedPanelSettings {
+    pub item: ItemId,
+    #[serde(flatten)]
+    pub settings: crate::panels::PanelSettings,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -309,7 +318,20 @@ pub fn snapshot_with_recently_closed(
         .map(|(profile, item)| PersistedOpenPanel { profile, item })
         .collect();
     open.sort_by_key(|entry| entry.profile);
-    state.panels = PersistedPanels { widths, open };
+    let mut settings: Vec<PersistedPanelSettings> = panels
+        .configured()
+        .filter(|(item, _)| persisted_panel(*item, None))
+        .map(|(item, settings)| PersistedPanelSettings {
+            item,
+            settings: settings.clone(),
+        })
+        .collect();
+    settings.sort_by_key(|entry| entry.item);
+    state.panels = PersistedPanels {
+        widths,
+        open,
+        settings,
+    };
 
     let active_space = active_space.filter(|s| state.spaces.iter().any(|x| x.id == *s));
     let persisted = |id: ItemId| state.items.iter().any(|i| i.id == id);
@@ -577,6 +599,11 @@ pub fn restore(state: SessionState) -> Restored {
     for entry in state.panels.widths.into_iter().take(MAX_SESSION_ITEMS) {
         if panel_of(entry.item).is_some() {
             panels.set_width(entry.item, f64::from(entry.width));
+        }
+    }
+    for entry in state.panels.settings.into_iter().take(MAX_SESSION_ITEMS) {
+        if panel_of(entry.item).is_some() {
+            panels.set_settings(entry.item, entry.settings);
         }
     }
     for entry in state.panels.open.into_iter().take(MAX_SESSION_PROFILES) {
@@ -1277,6 +1304,15 @@ mod tests {
         state.items.push(panel(21, 1));
         state.items.push(panel(22, 3));
         state.panels = PersistedPanels {
+            settings: vec![PersistedPanelSettings {
+                item: ItemId::from(21),
+                settings: crate::panels::PanelSettings {
+                    name: Some("Team".into()),
+                    mobile: true,
+                    reload_every_seconds: Some(300),
+                    ..Default::default()
+                },
+            }],
             widths: vec![PersistedPanelWidth {
                 item: ItemId::from(21),
                 width: 520,
@@ -1301,6 +1337,10 @@ mod tests {
             &[ItemId::from(20), ItemId::from(21)]
         );
         assert_eq!(restored.panels.width(ItemId::from(21)), 520);
+        let settings = restored.panels.settings(ItemId::from(21));
+        assert_eq!(settings.name.as_deref(), Some("Team"));
+        assert!(settings.mobile);
+        assert_eq!(settings.reload_every_seconds, Some(300));
         assert_eq!(
             restored.panels.open(ProfileId::from(1)),
             Some(ItemId::from(21))

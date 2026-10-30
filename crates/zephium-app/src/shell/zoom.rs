@@ -361,6 +361,16 @@ impl Shell {
         let Some(active) = self.windows.focused().and_then(|window| window.active) else {
             return operation_result(OperationOutcome::NoOp, OperationReason::NoFocusedWindow);
         };
+        self.adjust_zoom_of(active, step)
+    }
+
+    /// Zooms one page the person names: the active tab, or a web panel. The
+    /// caller authorizes `active`.
+    pub(super) fn adjust_zoom_of(
+        &mut self,
+        active: ItemId,
+        step: ZoomStep,
+    ) -> OperationDisposition {
         let Some(settled) = self.items.tab(active).map(|tab| tab.zoom) else {
             return operation_result(OperationOutcome::Rejected, OperationReason::InvalidScope);
         };

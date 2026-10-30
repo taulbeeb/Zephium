@@ -1,11 +1,13 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import { Dialog } from "bits-ui";
-  import type { WebPanelView } from "$shared/ipc/bindings";
+  import type { PanelSettingsInputV1, WebPanelView } from "$shared/ipc/bindings";
   import { tabs } from "$domain/tabs";
   import * as m from "$shared/i18n/messages";
   import Button from "$shared/ui/Button";
   import Field from "$shared/ui/Field";
+  import Checkbox from "$shared/ui/Checkbox";
+  import Select from "$shared/ui/Select";
   import { containerHue } from "$shared/lib/container-hue";
 
   let {
@@ -19,6 +21,39 @@
 
   let address = $state("");
   let container = $state<string | null>(null);
+  let name = $state("");
+  let mobile = $state(false);
+  let loadOnStartup = $state(false);
+  let unloadOnClose = $state(false);
+  let unloadAfter = $state("never");
+  let reloadEvery = $state("never");
+
+  const unloadOptions = [
+    { value: "never", label: m.panels_timer_never() },
+    { value: "5", label: m.panels_minutes({ count: 5 }) },
+    { value: "15", label: m.panels_minutes({ count: 15 }) },
+    { value: "30", label: m.panels_minutes({ count: 30 }) },
+    { value: "60", label: m.panels_minutes({ count: 60 }) },
+  ];
+  const reloadOptions = [
+    { value: "never", label: m.panels_timer_never() },
+    { value: "30", label: m.panels_seconds({ count: 30 }) },
+    { value: "60", label: m.panels_minutes({ count: 1 }) },
+    { value: "300", label: m.panels_minutes({ count: 5 }) },
+    { value: "900", label: m.panels_minutes({ count: 15 }) },
+    { value: "3600", label: m.panels_minutes({ count: 60 }) },
+  ];
+  // A value kept from before, not in the list, still shows as itself.
+  const withValue = (
+    options: { value: string; label: string }[],
+    value: string,
+    label: (count: number) => string,
+  ) =>
+    options.some((option) => option.value === value)
+      ? options
+      : [...options, { value, label: label(Number(value)) }];
+  const timer = (value: number | null) => (value === null ? "never" : String(value));
+  const parsed = (value: string) => (value === "never" ? null : Number(value));
   let busy = $state(false);
   let failed = $state(false);
   let opener: HTMLElement | null = null;
@@ -34,6 +69,13 @@
       failed = false;
       address = panel?.tab.url ?? "";
       container = panel?.tab.container ?? null;
+      const settings = panel?.settings;
+      name = settings?.name ?? "";
+      mobile = settings?.mobile ?? false;
+      loadOnStartup = settings?.load_on_startup ?? false;
+      unloadOnClose = settings?.unload_on_close ?? false;
+      unloadAfter = timer(settings?.unload_after_minutes ?? null);
+      reloadEvery = timer(settings?.reload_every_seconds ?? null);
     });
   });
 
@@ -52,6 +94,15 @@
         ok = settled((await tabs.loadPanel(panel.tab.id, address.trim())).outcome);
       if (ok && container !== (panel.tab.container ?? null))
         ok = settled((await tabs.setPanelContainer(panel.tab.id, container)).outcome);
+      const settings: PanelSettingsInputV1 = {
+        name: name.trim() || null,
+        mobile,
+        load_on_startup: loadOnStartup,
+        unload_on_close: unloadOnClose,
+        unload_after_minutes: parsed(unloadAfter),
+        reload_every_seconds: parsed(reloadEvery),
+      };
+      if (ok) ok = settled((await tabs.configurePanel(panel.tab.id, settings)).outcome);
     }
     busy = false;
     if (ok) open = false;
@@ -95,6 +146,13 @@
           void submit();
         }}
       >
+        {#if panel}<Field
+            label={m.panels_name()}
+            placeholder={panel.tab.title || m.untitled_tab()}
+            autocomplete="off"
+            maxlength={64}
+            bind:value={name}
+          />{/if}
         <Field
           label={m.panels_address()}
           placeholder={m.panels_address_placeholder()}
@@ -129,6 +187,43 @@
         {#if panel && container !== (panel.tab.container ?? null)}<p class="note">
             {m.panels_container_reload()}
           </p>{/if}
+        {#if panel}
+          <div class="options">
+            <Checkbox
+              label={m.panels_mobile()}
+              description={m.panels_mobile_note()}
+              checked={mobile}
+              onchange={(value) => (mobile = value)}
+            />
+            <Checkbox
+              label={m.panels_load_on_startup()}
+              checked={loadOnStartup}
+              onchange={(value) => (loadOnStartup = value)}
+            />
+            <Checkbox
+              label={m.panels_unload_on_close()}
+              checked={unloadOnClose}
+              onchange={(value) => (unloadOnClose = value)}
+            />
+            <div class="timers">
+              <Select
+                label={m.panels_unload_after()}
+                options={withValue(unloadOptions, unloadAfter, (count) =>
+                  m.panels_minutes({ count }),
+                )}
+                bind:value={unloadAfter}
+                disabled={unloadOnClose}
+              />
+              <Select
+                label={m.panels_reload_every()}
+                options={withValue(reloadOptions, reloadEvery, (count) =>
+                  m.panels_seconds({ count }),
+                )}
+                bind:value={reloadEvery}
+              />
+            </div>
+          </div>
+        {/if}
         {#if failed}<p class="failed" role="alert">{m.panels_failed()}</p>{/if}
         <footer>
           {#if panel}<div class="start">
@@ -216,6 +311,17 @@
     block-size: 8px;
     border-radius: var(--radius-capsule);
     background: var(--container-hue);
+  }
+
+  .options {
+    display: grid;
+    gap: 12px;
+  }
+
+  .timers {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
   }
 
   .note,

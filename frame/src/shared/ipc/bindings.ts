@@ -456,6 +456,9 @@ export const commands = {
 	/**  Goes to an address in the panel. */
 	panelsLoad: (panel: string, input: string) => __TAURI_INVOKE<OperationAdmission>("panels_load", { panel, input }),
 	panelsNavigate: (panel: string, action: PanelNavigationV1) => __TAURI_INVOKE<OperationAdmission>("panels_navigate", { panel, action }),
+	/**  Replaces a panel's name, lifecycle timers and layout choice. */
+	panelsConfigure: (panel: string, settings: PanelSettingsInputV1) => __TAURI_INVOKE<OperationAdmission>("panels_configure", { panel, settings }),
+	panelsZoom: (panel: string, step: PanelZoomV1) => __TAURI_INVOKE<OperationAdmission>("panels_zoom", { panel, step }),
 	operationStatus: (operationId: string) => __TAURI_INVOKE<OperationStatus>("operation_status", { operationId }),
 	operationsReconcile: () => __TAURI_INVOKE<OperationDisposition[]>("operations_reconcile"),
 	operationAcknowledge: (operationId: string) => __TAURI_INVOKE<boolean>("operation_acknowledge", { operationId }),
@@ -2614,6 +2617,19 @@ export type PanelRect = {
 	height: number | null,
 };
 
+/**
+ *  What the person chose for one panel, as chrome sends it. The shell
+ *  sanitizes the name and timers.
+ */
+export type PanelSettingsInputV1 = {
+	name: string | null,
+	mobile: boolean,
+	load_on_startup: boolean,
+	unload_on_close: boolean,
+	unload_after_minutes: number | null,
+	reload_every_seconds: number | null,
+};
+
 export type PanelState = {
 	window_id: string | null,
 	revision: string,
@@ -2629,6 +2645,8 @@ export type PanelState = {
 	/**  The tab whose address is being edited; it is no destination of its own. */
 	seed_tab: string | null,
 };
+
+export type PanelZoomV1 = "in" | "out" | "reset";
 
 export type PersonalHideView = {
 	id: string,
@@ -3595,6 +3613,18 @@ export type WebPanelLayout = {
 	strip: number | null,
 };
 
+/**  What the person chose for one web panel. */
+export type WebPanelSettingsView = {
+	/**  Shown instead of the page's title. */
+	name: string | null,
+	/**  Asks sites for their phone layout. */
+	mobile: boolean,
+	load_on_startup: boolean,
+	unload_on_close: boolean,
+	unload_after_minutes: number | null,
+	reload_every_seconds: number | null,
+};
+
 /**  A site docked beside the page, shared by every space of the profile. */
 export type WebPanelView = {
 	/**  The panel's page, kept current by per-tab deltas like any tab's. */
@@ -3602,6 +3632,7 @@ export type WebPanelView = {
 	/**  Points; the docked width when the window has room for it. */
 	width: number,
 	open: boolean,
+	settings: WebPanelSettingsView,
 };
 
 /**

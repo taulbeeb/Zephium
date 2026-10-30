@@ -257,19 +257,173 @@ fn panels_and_the_open_one_survive_a_restart() {
 }
 
 #[test]
-fn a_hidden_sidebar_puts_the_panels_away_until_it_comes_back() {
+fn a_hidden_sidebar_keeps_the_panel_docked_and_puts_the_strip_away() {
     let (mut shell, engine, screen, _store) = browsed();
     let tab = active_id(&screen);
     navigate_and_commit(&mut shell, tab, "news.example");
     let panel = add(&mut shell, "chat.example");
     shell.windows.focused_mut().unwrap().metrics.sidebar_hidden = true;
-    assert_eq!(shell.shown_panel(), None);
-    let _ = shell.relayout();
-    assert!(layouts(&engine).pop().unwrap().ends_with(&tab.to_string()));
-    shell.windows.focused_mut().unwrap().metrics.sidebar_hidden = false;
+    let metrics = shell.layout_metrics(shell.windows.focused().unwrap());
+    assert_eq!(metrics.panel_strip, 0.0);
+    assert!(metrics.panel > 0.0);
     let _ = shell.relayout();
     assert!(layouts(&engine)
         .pop()
         .unwrap()
-        .ends_with(&panel.to_string()));
+        .ends_with(&format!("{tab},{panel}")));
+}
+
+#[test]
+fn settings_rename_and_a_phone_layout_rebuilds_the_page() {
+    let (mut shell, engine, screen, _store) = browsed();
+    let panel = add(&mut shell, "chat.example");
+    let creates = |engine: &FakeEngine| {
+        engine
+            .calls()
+            .iter()
+            .filter(|call| call.starts_with(&format!("create {panel} ")))
+            .count()
+    };
+    let before = creates(&engine);
+    assert!(done(panel_op(
+        &mut shell,
+        PanelCommand::Configure {
+            id: panel,
+            settings: zephium_core::panels::PanelSettings {
+                name: Some(" Team ".into()),
+                mobile: true,
+                ..Default::default()
+            },
+        },
+    )));
+    assert!(engine.calls().contains(&format!("mobile {panel} true")));
+    assert_eq!(creates(&engine), before + 1);
+    let view = &last(&screen).web_panels[0];
+    assert_eq!(view.settings.name.as_deref(), Some("Team"));
+    assert!(view.settings.mobile);
+    // The same settings again change nothing.
+    assert_eq!(
+        panel_op(
+            &mut shell,
+            PanelCommand::Configure {
+                id: panel,
+                settings: zephium_core::panels::PanelSettings {
+                    name: Some("Team".into()),
+                    mobile: true,
+                    ..Default::default()
+                },
+            },
+        )
+        .outcome,
+        OperationOutcome::NoOp
+    );
+}
+
+#[test]
+fn a_panel_zooms_and_answers_its_number_key() {
+    let (mut shell, engine, _screen, _store) = browsed();
+    let first = add(&mut shell, "chat.example");
+    let second = add(&mut shell, "music.example");
+    assert_ne!(
+        panel_op(
+            &mut shell,
+            PanelCommand::Zoom {
+                id: second,
+                step: crate::PanelZoom::In,
+            },
+        )
+        .outcome,
+        OperationOutcome::Rejected
+    );
+    assert!(engine
+        .calls()
+        .iter()
+        .any(|call| call.starts_with(&format!("zoom {second}"))));
+    let profile = profile(&shell);
+    assert!(done(panel_op(&mut shell, PanelCommand::Select(1))));
+    assert_eq!(shell.panels.open(profile), Some(first));
+    assert!(done(panel_op(&mut shell, PanelCommand::Select(1))));
+    assert_eq!(shell.panels.open(profile), None);
+    assert_eq!(
+        panel_op(&mut shell, PanelCommand::Select(9)).outcome,
+        OperationOutcome::NoOp
+    );
+}
+
+#[test]
+fn moving_a_tab_to_the_panels_closes_the_tab() {
+    let (mut shell, _engine, screen, _store) = browsed();
+    let first = active_id(&screen);
+    navigate_and_commit(&mut shell, first, "news.example");
+    shell.handle(Command::Open);
+    let tab = active_id(&screen);
+    navigate_and_commit(&mut shell, tab, "mail.example");
+    assert_ne!(
+        panel_op(&mut shell, PanelCommand::MoveTab(tab)).outcome,
+        OperationOutcome::Rejected
+    );
+    assert!(shell.items.get(tab).is_none());
+    let panel = *shell.profile_panels(profile(&shell)).last().unwrap();
+    assert_eq!(
+        shell
+            .items
+            .tab(panel)
+            .unwrap()
+            .url
+            .as_ref()
+            .map(ToString::to_string),
+        Some("https://mail.example/".into())
+    );
+}
+
+#[test]
+fn a_panel_set_to_unload_on_close_sleeps_when_it_closes() {
+    let (mut shell, _engine, _screen, _store) = browsed();
+    let panel = add(&mut shell, "chat.example");
+    panel_op(
+        &mut shell,
+        PanelCommand::Configure {
+            id: panel,
+            settings: zephium_core::panels::PanelSettings {
+                unload_on_close: true,
+                ..Default::default()
+            },
+        },
+    );
+    assert!(shell.items.tab(panel).unwrap().has_view());
+    assert!(done(panel_op(&mut shell, PanelCommand::Open(None))));
+    assert!(!shell.items.tab(panel).unwrap().has_view());
+}
+
+#[test]
+fn timers_put_an_idle_closed_panel_to_sleep_and_reload_an_awake_one() {
+    let (mut shell, engine, _screen, _store) = browsed();
+    let idle = add(&mut shell, "chat.example");
+    let busy = add(&mut shell, "news.example");
+    for (id, settings) in [
+        (
+            idle,
+            zephium_core::panels::PanelSettings {
+                unload_after_minutes: Some(5),
+                ..Default::default()
+            },
+        ),
+        (
+            busy,
+            zephium_core::panels::PanelSettings {
+                reload_every_seconds: Some(60),
+                ..Default::default()
+            },
+        ),
+    ] {
+        panel_op(&mut shell, PanelCommand::Configure { id, settings });
+    }
+    // `busy` is open, so `idle` was closed when `busy` opened.
+    assert!(shell.items.tab(idle).unwrap().has_view());
+    let long_ago = std::time::Instant::now() - std::time::Duration::from_secs(10 * 60);
+    shell.panel_timers.age_for_test(idle, busy, long_ago);
+    shell.handle(Command::PanelWake);
+    assert!(!shell.items.tab(idle).unwrap().has_view());
+    assert!(shell.items.tab(busy).unwrap().has_view());
+    assert!(engine.calls().contains(&format!("reload {busy}")));
 }
