@@ -35,7 +35,7 @@ const defaults = {
   "tabs.after-close": "next",
   "tabs.switch-to-open": "true",
   "tabs.automatic-pip": "true",
-  "tabs.startup": "continue",
+  "tabs.startup": "new-tab",
   "tabs.startup-pages": "",
   "tabs.home": "",
   "network.proxy": "system",

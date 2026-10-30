@@ -142,6 +142,12 @@ fn items_projection_is_one_ordered_authoritative_focused_sidebar_snapshot() {
         ..Default::default()
     });
 
+    store
+        .settings
+        .lock()
+        .unwrap()
+        .insert("tabs.startup".into(), "continue".into());
+
     let (mut shell, _engine, screen) = setup_with(store);
     shell.handle(Command::Bootstrap);
     let state = last(&screen);

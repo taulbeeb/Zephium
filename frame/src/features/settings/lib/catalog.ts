@@ -138,7 +138,7 @@ export const fields = {
     section: "general",
     label: m.pref_general_startup,
     description: m.pref_general_startup_help,
-    initial: "continue",
+    initial: "new-tab",
     options: [
       { value: "continue", label: m.pref_general_startup_option_0 },
       { value: "new-tab", label: m.pref_general_startup_option_1 },

@@ -413,6 +413,11 @@ fn delayed_authorization_proof_reschedules_newer_survivor_durability() {
 fn restart_resumes_journaled_native_erasure_before_creating_views() {
     let store = Arc::new(FakeStore::default());
     store
+        .settings
+        .lock()
+        .unwrap()
+        .insert("tabs.startup".into(), "continue".into());
+    store
         .authorize_outcomes
         .lock()
         .unwrap()

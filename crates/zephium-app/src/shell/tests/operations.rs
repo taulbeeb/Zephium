@@ -1424,6 +1424,12 @@ fn keyboard_selection_walks_the_sidebar_from_favorites_through_pinned_folders() 
         })),
         ..Default::default()
     });
+    store
+        .settings
+        .lock()
+        .unwrap()
+        .insert("tabs.startup".into(), "continue".into());
+
     let (mut shell, _engine, screen) = setup_with(store);
     shell.handle(Command::Bootstrap);
 

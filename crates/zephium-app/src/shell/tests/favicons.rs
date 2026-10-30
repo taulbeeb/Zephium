@@ -207,8 +207,20 @@ fn bootstrap_hydrates_restored_tab_icons_without_native_callbacks() {
     restored.handle(Command::Bootstrap);
 
     let state = last(&restored_screen);
-    assert_eq!(state.tabs.len(), 2);
-    assert!(state.tabs.iter().all(|tab| tab.icon.is_some()));
+    assert_eq!(state.tabs.len(), 3);
+    for id in [first_id, second_id] {
+        assert!(state
+            .tabs
+            .iter()
+            .find(|tab| tab.id == id.to_string())
+            .unwrap()
+            .icon
+            .is_some());
+    }
+    assert_eq!(
+        restored.items.tab(active_id(&restored_screen)).unwrap().url,
+        None
+    );
     assert!(engine
         .calls()
         .iter()
