@@ -7,6 +7,7 @@
   import { PANEL_STRIP_WIDTH } from "../lib/strip";
   import WebPanelStrip from "./WebPanelStrip.svelte";
   import PanelResizeHandle from "./PanelResizeHandle.svelte";
+  import PanelHeader from "./PanelHeader.svelte";
 
   type Sheet = typeof import("./PanelSheet.svelte").default;
 
@@ -109,6 +110,7 @@
   >
     <WebPanelStrip
       width={place.strip}
+      header={place.header > 0}
       onadd={() => void sheet(null)}
       onedit={(panel) => {
         stay();
@@ -116,6 +118,7 @@
       }}
     />
   </div>
+  {#if open && place.width > 0 && place.header > 0}<PanelHeader {place} panel={open} />{/if}
   {#if open && place.width > 0 && !open.settings.floating}<PanelResizeHandle
       {place}
       panel={open.tab.id}

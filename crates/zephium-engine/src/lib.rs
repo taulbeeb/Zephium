@@ -2322,6 +2322,11 @@ impl Engine for WebviewEngine {
             let _ = host::try_with(move |host| host.set_mobile_user_agent(id, mobile));
         });
     }
+    fn set_pane_inset(&self, window: WindowId, inset: Option<(ItemId, f64)>) {
+        let _ = self.run(move || {
+            let _ = host::try_with(move |host| host.set_pane_inset(window, inset));
+        });
+    }
     fn set_item_style(&self, id: ItemId, css: Option<Arc<str>>) {
         let _ = self.run(move || {
             let _ = host::try_with(move |host| host.set_item_style(id, css));

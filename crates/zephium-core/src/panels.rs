@@ -16,6 +16,8 @@ pub const MAX_PANEL_WIDTH: u32 = 960;
 pub const DEFAULT_PANEL_WIDTH: u32 = 400;
 /// The icon strip at the window's trailing edge, its padding included.
 pub const PANEL_STRIP_WIDTH: f64 = 52.0;
+/// The header the interface draws across the top of a docked panel.
+pub const PANEL_HEADER_HEIGHT: f64 = 40.0;
 
 pub fn clamp_panel_width(width: f64) -> u32 {
     if !width.is_finite() {

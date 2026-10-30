@@ -62,7 +62,7 @@ const defaults = {
   "tabs.external-position": "new-tab",
   "tabs.close-button": "hover",
   "panels.strip": "always",
-  "panels.toolbar": "bottom",
+  "panels.toolbar": "header",
   "panels.toolbar-navigation": "true",
   "panels.toolbar-reload": "true",
   "panels.toolbar-zoom": "true",

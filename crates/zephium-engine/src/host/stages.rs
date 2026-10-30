@@ -490,6 +490,17 @@ impl EngineHost {
         }
     }
 
+    /// A leaf's page starts this far below its place's top.
+    pub(crate) fn set_pane_inset(&mut self, window: WindowId, inset: Option<(ItemId, f64)>) {
+        let inset = inset.filter(|(_, top)| top.is_finite() && *top > 0.0 && *top <= 120.0);
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
+        if let Some(stage) = self.ensure_stage(window) {
+            stage.set_top_inset(inset);
+        }
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        let _ = (window, inset);
+    }
+
     #[cfg(target_os = "windows")]
     pub(crate) fn set_resize_guide(&mut self, window: WindowId, zone: Option<Rect>) {
         if let Some(stage) = self.ensure_stage(window) {

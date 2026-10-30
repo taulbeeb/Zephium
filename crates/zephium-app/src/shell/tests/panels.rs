@@ -604,3 +604,50 @@ fn dragging_a_docked_panel_edge_natively_sets_its_width() {
     }));
     assert_eq!(shell.panels.width(panel), before + 120);
 }
+
+#[test]
+fn a_docked_panel_leaves_a_header_band_and_a_floating_one_does_not() {
+    let (mut shell, engine, screen, _store) = browsed();
+    let tab = active_id(&screen);
+    navigate_and_commit(&mut shell, tab, "news.example");
+    let panel = add(&mut shell, "chat.example");
+    let header = format!(
+        "inset {panel} {}",
+        zephium_core::panels::PANEL_HEADER_HEIGHT
+    );
+    let insets = |engine: &FakeEngine| {
+        engine
+            .calls()
+            .iter()
+            .filter(|call| **call == header)
+            .count()
+    };
+    let _ = shell.relayout();
+    let docked = insets(&engine);
+    assert!(docked > 0);
+    assert!(done(panel_op(
+        &mut shell,
+        PanelCommand::Configure {
+            id: panel,
+            settings: zephium_core::panels::PanelSettings {
+                floating: true,
+                ..Default::default()
+            },
+        },
+    )));
+    let _ = shell.relayout();
+    assert_eq!(insets(&engine), docked);
+    let _ = shell.handle_operation(Command::SetAppSetting {
+        key: "panels.toolbar".into(),
+        value: "bottom".into(),
+    });
+    assert!(done(panel_op(
+        &mut shell,
+        PanelCommand::Configure {
+            id: panel,
+            settings: Default::default(),
+        },
+    )));
+    let _ = shell.relayout();
+    assert_eq!(insets(&engine), docked);
+}

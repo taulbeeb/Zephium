@@ -901,6 +901,10 @@ impl Shell {
             self.search.include_history = value == "true";
         }
         self.tab_preferences.apply(&key, &value);
+        if key == "panels.toolbar" {
+            self.panel_header = value == "header";
+            let _ = self.relayout();
+        }
         if key == "panels.strip" {
             self.panel_strip_auto = value == "auto";
             self.panel_strip_peek = false;

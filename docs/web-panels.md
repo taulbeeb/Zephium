@@ -178,14 +178,21 @@ Gaps closed after phase 1:
   groups show: back and forward, reload, zoom, slide over or keep beside,
   close. A floating panel's width grip stays whenever buttons show.
 
+- **Header across the panel** (the default for Panel buttons): a docked
+  panel's page starts 40 points below its place (`set_pane_inset`, applied
+  by both stages), and the interface draws back, forward, reload, zoom,
+  slide over and close in that band, as Zen Sidebar does. On macOS the
+  stage's own empty places, outside pages, covers and dividers, pass the
+  pointer to the interface beneath. A floating panel has no band, so its
+  buttons go to the strip's top.
+- **Waiting strip:** the window's right edge is watched natively, as the
+  left is for a hidden sidebar, since the page takes the pointer.
+
 Not done:
 
-- **A header bar above the panel:** buttons drawn across the top of the
-  panel itself. The interface cannot draw over a page, so the panel's page
-  would have to start lower than the page beside it. The split engine lays
-  every leaf of a branch at the same height, and the macOS stage takes
-  clicks in the gaps between pages, so this needs a new layout shape and
-  native hit-testing changes.
+- **Header hover on macOS:** while the pointer is over the page layer the
+  interface's hover tracking is parked, so header buttons may not light up
+  on hover. They still take clicks.
 - **Search in Web Panel:** WebKit gives the browser no hook for the
   selected text in its menu. Type the search in the panel's address field.
 - **Padding and animation preferences:** the strip follows Zephium's own

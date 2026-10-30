@@ -661,6 +661,9 @@ pub struct WebPanelLayout {
     pub height: f64,
     /// The icon strip's width at the window's trailing edge.
     pub strip: f64,
+    /// The band at the top of the panel's place left to the interface for
+    /// its header; zero without one.
+    pub header: f64,
 }
 
 /// A separate cookie jar of the focused profile.

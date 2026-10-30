@@ -241,7 +241,7 @@ pub fn value_allowed(key: &str, value: &str) -> bool {
         // The web panel strip stays, or waits at the window's edge.
         "panels.strip" => matches!(value, "always" | "auto"),
         // Where the open panel's buttons stand on the strip, if at all.
-        "panels.toolbar" => matches!(value, "bottom" | "top" | "hidden"),
+        "panels.toolbar" => matches!(value, "header" | "bottom" | "top" | "hidden"),
         "tabs.after-close" => matches!(value, "next" | "previous" | "recent"),
         // A new tab in front at launch; everything restored stays in the sidebar.
         "tabs.startup" => matches!(value, "continue" | "new-tab" | "pages"),

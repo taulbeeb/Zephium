@@ -25,10 +25,13 @@
 
   let {
     width,
+    header = false,
     onadd,
     onedit,
   }: {
     width: number;
+    /** The open panel carries its buttons in a header across its top. */
+    header?: boolean;
     onadd: () => void;
     /** Opens the sheet for one panel. */
     onedit: (panel: WebPanelView) => void;
@@ -36,7 +39,10 @@
 
   const panels = $derived(tabs.webPanels());
   // Where the open panel's buttons stand, and which of them a person kept.
-  const toolbar = $derived(preferences.value("panels.toolbar"));
+  // Set to a header, the buttons go to the strip's top while the panel
+  // floats, since a floating panel has no band for one.
+  const chosen = $derived(preferences.value("panels.toolbar"));
+  const toolbar = $derived(chosen === "header" ? (header ? "hidden" : "top") : chosen);
   const shows = (group: "navigation" | "reload" | "zoom" | "layout" | "close") =>
     preferences.value(`panels.toolbar-${group}`) !== "false";
   const open = $derived(tabs.openPanel());

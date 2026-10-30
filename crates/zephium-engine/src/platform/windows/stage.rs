@@ -137,6 +137,8 @@ struct HostView {
 type PlacementFailureCallback = Rc<dyn Fn(ItemId, Arc<AtomicBool>)>;
 
 struct State {
+    /// A leaf whose page starts below its place's top.
+    top_inset: Option<(ItemId, f64)>,
     fullscreen_transition: Option<super::fullscreen_transition::FullscreenTransition>,
     fullscreen_restore: Option<crate::fullscreen::ScreenRect>,
     parent: HWND,
@@ -394,6 +396,7 @@ impl Stage {
                 .unwrap_or_default()
         });
         let state = Rc::new(RefCell::new(State {
+            top_inset: None,
             fullscreen_transition: None,
             fullscreen_restore: None,
             parent,
@@ -539,6 +542,27 @@ impl Stage {
         }
         schedule_sync(&self.state);
         true
+    }
+
+    pub fn set_top_inset(&self, inset: Option<(ItemId, f64)>) {
+        {
+            let Ok(mut s) = self.state.try_borrow_mut() else {
+                return;
+            };
+            if s.top_inset == inset {
+                return;
+            }
+            let touched = s
+                .top_inset
+                .iter()
+                .chain(inset.iter())
+                .map(|(id, _)| *id)
+                .collect::<Vec<_>>();
+            s.top_inset = inset;
+            s.dirty.extend(touched);
+            s.revision = s.revision.wrapping_add(1);
+        }
+        schedule_sync(&self.state);
     }
 
     pub fn has_view(&self, id: ItemId) -> bool {
@@ -1499,12 +1523,22 @@ fn sync(state: &Rc<RefCell<State>>) {
     let local = Rect::new(0.0, 0.0, size.0, size.1);
     let radius = ((RADIUS * scale * 2.0).round() as i32).max(1);
     let floating = tree.as_ref().map(split::floating).unwrap_or_default();
+    let top_inset = state.try_borrow().ok().and_then(|state| state.top_inset);
     let pane_rects = tree
         .as_ref()
         .map(|tree| split::layout(tree, local, gap))
         .unwrap_or_default()
         .into_iter()
         .filter_map(|(id, rect)| {
+            let rect = match top_inset {
+                Some((inset, top)) if inset == id => Rect::new(
+                    rect.x,
+                    rect.y + top,
+                    rect.width,
+                    (rect.height - top).max(0.0),
+                ),
+                _ => rect,
+            };
             let (width, height) = rounded_native_size(rect.width, rect.height, scale)?;
             let shift = preview
                 .filter(|(shifted, _, _)| *shifted == id)

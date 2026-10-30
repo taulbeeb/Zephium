@@ -234,6 +234,8 @@ pub struct Shell {
     panel_strip_peek: bool,
     /// The panel sheet is open over the window's middle.
     panel_sheet: bool,
+    /// A docked panel carries its buttons in a header across its top.
+    panel_header: bool,
     spaces: Spaces,
     items: Items,
     recently_closed: Vec<zephium_core::session::PersistedClosedTab>,
@@ -485,6 +487,9 @@ impl Shell {
             panel_strip_auto: store.app_setting("panels.strip").as_deref() == Some("auto"),
             panel_strip_peek: false,
             panel_sheet: false,
+            panel_header: store
+                .app_setting("panels.toolbar")
+                .is_none_or(|value| value == "header"),
             spaces: Spaces::default(),
             items: Items::default(),
             recently_closed: Vec::new(),

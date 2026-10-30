@@ -344,8 +344,9 @@ export const fields = {
     section: "tabs",
     label: m.panels_toolbar_pref,
     description: m.panels_toolbar_pref_help,
-    initial: "bottom",
+    initial: "header",
     options: [
+      { value: "header", label: m.panels_toolbar_header },
       { value: "bottom", label: m.panels_toolbar_bottom },
       { value: "top", label: m.panels_toolbar_top },
       { value: "hidden", label: m.panels_toolbar_hidden },

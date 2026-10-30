@@ -35,6 +35,8 @@ export type WebPanelPlace = {
   width: number;
   height: number;
   strip: number;
+  /** The band atop the panel's place where the interface draws its header. */
+  header: number;
 };
 
 function place(panel: WebPanelLayout | null | undefined): WebPanelPlace | null {
@@ -47,6 +49,7 @@ function place(panel: WebPanelLayout | null | undefined): WebPanelPlace | null {
     width: panel.width!,
     height: panel.height!,
     strip: panel.strip!,
+    header: panel.header !== null && Number.isFinite(panel.header) ? panel.header : 0,
   };
 }
 

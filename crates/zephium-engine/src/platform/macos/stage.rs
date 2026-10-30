@@ -159,6 +159,9 @@ pub struct StageIvars {
     // registrar supports ivar alignments only through 8 bytes. Keep the tree
     // in a correctly aligned Rust allocation behind a pointer-sized ivar.
     tree: RefCell<Option<Box<Pane>>>,
+    /// A leaf whose page starts below its place's top, leaving the band to
+    /// the interface beneath; at most one entry.
+    top_insets: RefCell<HashMap<ItemId, f64>>,
     views: RefCell<HashMap<ItemId, HostView>>,
     // A raw view is never exposed while it still contains WKWebView's
     // construction-time blank document. `visible` is the logical split
@@ -277,6 +280,28 @@ define_class!(
             let _: () = unsafe { msg_send![super(self), viewDidMoveToWindow] };
             // SAFETY: NSView parent-window access is main-thread confined.
             if self.window().is_none() { self.cancel_split_drag(false); }
+        }
+
+        // The stage's own empty places (a panel's header band, a gap with no
+        // divider) belong to the interface beneath it; only a page, a cover
+        // or a divider takes the pointer here.
+        #[unsafe(method(hitTest:))]
+        fn hit_test(&self, point: NSPoint) -> *mut NSView {
+            let hit: *mut NSView = unsafe { msg_send![super(self), hitTest: point] };
+            if !std::ptr::eq(hit, std::ptr::from_ref::<NSView>(self)) {
+                return hit;
+            }
+            // SAFETY: main-thread geometry reads of this live view.
+            let local = unsafe { self.superview() }
+                .map(|parent| self.convertPoint_fromView(point, Some(&parent)))
+                .unwrap_or(point);
+            let (x, y) = (local.x, self.bounds().size.height - local.y);
+            let tree = self.ivars().tree.try_borrow().ok().and_then(|tree| tree.as_deref().cloned());
+            let dragging = self.ivars().drag.try_borrow().map_or(true, |drag| drag.is_some());
+            let on_divider = tree.is_some_and(|tree| {
+                split::divider_at(&tree, self.region(), self.ivars().gap.get(), x, y).is_some()
+            });
+            if on_divider || dragging { hit } else { std::ptr::null_mut() }
         }
 
         #[unsafe(method(mouseDown:))]
@@ -675,6 +700,20 @@ impl ContentStage {
         }
         let _ = self.position_panes();
         !self.ivars().stage_retry_terminal.get()
+    }
+
+    pub fn set_top_inset(&self, inset: Option<(ItemId, f64)>) {
+        let next: HashMap<ItemId, f64> = inset.into_iter().collect();
+        let Ok(mut insets) = self.ivars().top_insets.try_borrow_mut() else {
+            return;
+        };
+        if *insets == next {
+            return;
+        }
+        *insets = next;
+        drop(insets);
+        self.bump_layout_epoch();
+        let _ = self.position_panes();
     }
 
     pub fn set_on_ratio(&self, f: Box<dyn Fn(Pane)>) {
@@ -1856,7 +1895,16 @@ impl ContentStage {
             }
             let region = Rect::new(0.0, 0.0, bounds.size.width, bounds.size.height);
             let mut paintable = HashSet::new();
+            let insets = ivars
+                .top_insets
+                .try_borrow()
+                .map(|insets| insets.clone())
+                .unwrap_or_default();
             for (id, r) in split::layout(&tree, region, gap) {
+                let r = match insets.get(&id) {
+                    Some(top) => Rect::new(r.x, r.y + top, r.width, (r.height - top).max(0.0)),
+                    None => r,
+                };
                 if let Some(view) = views.get(&id) {
                     if !self.layout_epoch_is_current(epoch) {
                         continue 'attempt;

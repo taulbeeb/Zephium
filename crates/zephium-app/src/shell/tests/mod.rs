@@ -595,6 +595,11 @@ impl Engine for FakeEngine {
     fn set_mobile_user_agent(&self, id: ItemId, mobile: bool) {
         self.log(format!("mobile {id} {mobile}"));
     }
+    fn set_pane_inset(&self, _window: WindowId, inset: Option<(ItemId, f64)>) {
+        if let Some((id, top)) = inset {
+            self.log(format!("inset {id} {top}"));
+        }
+    }
     fn set_item_style(&self, id: ItemId, css: Option<std::sync::Arc<str>>) {
         self.log(format!("style {id} {}", css.is_some()));
     }

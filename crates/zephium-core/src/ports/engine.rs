@@ -772,6 +772,11 @@ pub trait Engine {
     /// it. Built by the shell from a validated panel selector, never page
     /// text.
     fn set_item_style(&self, _id: ItemId, _css: Option<Arc<str>>) {}
+    /// One leaf of `window`'s tree starts this many points below the top of
+    /// its place, leaving that band to the interface beneath (a docked
+    /// panel's header); none gives every leaf its whole place. Sent before
+    /// the layout it belongs to.
+    fn set_pane_inset(&self, _window: WindowId, _inset: Option<(ItemId, f64)>) {}
     /// Browser-owned file actions. Only trusted Shell admission supplies the
     /// profile partition; the caller supplies IDs, never filesystem paths.
     fn download_call(

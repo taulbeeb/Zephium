@@ -3626,6 +3626,11 @@ export type WebPanelLayout = {
 	height: number | null,
 	/**  The icon strip's width at the window's trailing edge. */
 	strip: number | null,
+	/**
+	 *  The band at the top of the panel's place left to the interface for
+	 *  its header; zero without one.
+	 */
+	header: number | null,
 };
 
 /**  What the person chose for one web panel. */

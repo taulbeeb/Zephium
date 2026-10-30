@@ -152,6 +152,13 @@ impl Shell {
                     && !privileged_overlay_active
                     && filling.is_none()
             });
+        // A docked panel's page starts below a header the interface draws.
+        // Floating, the band would lie over the page, where the interface
+        // cannot draw, so a floating panel keeps its buttons on the strip.
+        let header = panel
+            .filter(|_| self.panel_header && !metrics.panel_floats)
+            .map(|(id, _)| (id, zephium_core::panels::PANEL_HEADER_HEIGHT));
+        self.engine.set_pane_inset(win.id, header);
         let web_panel = (metrics.panel_strip > 0.0).then(|| {
             let rect = l.panel.unwrap_or_default();
             zephium_ipc::WebPanelLayout {
@@ -160,6 +167,7 @@ impl Shell {
                 width: rect.width,
                 height: rect.height,
                 strip: metrics.panel_strip,
+                header: header.map_or(0.0, |(_, top)| top),
             }
         });
         (self.emit)(Projection::Layout(LayoutState {
