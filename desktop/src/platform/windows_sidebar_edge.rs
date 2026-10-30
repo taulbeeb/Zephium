@@ -31,6 +31,8 @@ const WAITING_MS: u32 = 250;
 struct Edge {
     window: WebviewWindow,
     hwnd: HWND,
+    /// The trailing edge, where a waiting panel strip is, not the leading.
+    right: bool,
     near: bool,
     last: Option<f64>,
 }
@@ -42,17 +44,23 @@ thread_local! {
 
 /// Starts or stops watching `window`'s left edge. Runs on the UI thread.
 pub fn watch(window: &WebviewWindow, on: bool) {
+    watch_side(window, false, on);
+}
+
+/// Starts or stops watching one of `window`'s side edges.
+pub fn watch_side(window: &WebviewWindow, right: bool, on: bool) {
     let Ok(hwnd) = window.hwnd() else {
         return;
     };
     let hwnd = HWND(hwnd.0);
     let any = EDGES.with(|edges| {
         let mut edges = edges.borrow_mut();
-        edges.retain(|edge| edge.hwnd != hwnd);
+        edges.retain(|edge| edge.hwnd != hwnd || edge.right != right);
         if on {
             edges.push(Edge {
                 window: window.clone(),
                 hwnd,
+                right,
                 near: false,
                 last: None,
             });
@@ -107,7 +115,8 @@ fn read() {
             watching |= in_front;
             let x = cursor
                 .filter(|_| in_front)
-                .and_then(|cursor| local_x(edge.hwnd, cursor));
+                .and_then(|cursor| local_x(edge.hwnd, cursor))
+                .map(|(x, width)| if edge.right { width - x } else { x });
             let near = match x {
                 Some(x) => {
                     let step = edge.last.map_or(0.0, |last| x - last);
@@ -121,15 +130,19 @@ fn read() {
             };
             if near != edge.near {
                 edge.near = near;
-                changes.push((edge.window.clone(), near));
+                changes.push((edge.window.clone(), edge.right, near));
             }
         }
     });
-    for (window, near) in changes {
+    for (window, right, near) in changes {
         crate::emit_to_privileged(
             window.app_handle(),
             window.label(),
-            "zephium:sidebar-edge",
+            if right {
+                "zephium:panel-edge"
+            } else {
+                "zephium:sidebar-edge"
+            },
             &serde_json::json!({ "near": near }),
         );
     }
@@ -150,9 +163,10 @@ fn is_front(window: HWND, front: HWND) -> bool {
     }
 }
 
-/// The pointer's distance from the window's left edge in DIPs, when it is
-/// over the window itself and not another one laid over it.
-fn local_x(window: HWND, cursor: POINT) -> Option<f64> {
+/// The pointer's distance from the window's left edge, and the client
+/// width, in DIPs, when it is over the window itself and not another one
+/// laid over it.
+fn local_x(window: HWND, cursor: POINT) -> Option<(f64, f64)> {
     let mut at = cursor;
     let mut client = RECT::default();
     // SAFETY: plain reads of a live window's client area and DPI, and of the
@@ -165,7 +179,11 @@ fn local_x(window: HWND, cursor: POINT) -> Option<f64> {
             return None;
         }
         let dpi = GetDpiForWindow(window);
-        (at.x >= 0 && at.y >= 0 && at.x < client.right && at.y < client.bottom && dpi != 0)
-            .then(|| f64::from(at.x) * 96.0 / f64::from(dpi))
+        (at.x >= 0 && at.y >= 0 && at.x < client.right && at.y < client.bottom && dpi != 0).then(
+            || {
+                let scale = 96.0 / f64::from(dpi);
+                (f64::from(at.x) * scale, f64::from(client.right) * scale)
+            },
+        )
     }
 }

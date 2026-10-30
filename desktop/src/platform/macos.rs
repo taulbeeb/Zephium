@@ -623,6 +623,13 @@ thread_local! {
     static HIDDEN_SIDEBARS: RefCell<HashSet<String>> = RefCell::new(HashSet::new());
 }
 
+/// A panel strip waits at the window's right edge, beneath the page; that
+/// edge is watched while it waits, as a hidden sidebar's is.
+pub fn panel_edge(window: &WebviewWindow, waiting: bool) {
+    let owner = window.clone();
+    let _ = window.run_on_main_thread(move || sidebar_edge::watch_side(&owner, true, waiting));
+}
+
 /// The sidebar is hidden or back: its left edge is watched while it is away,
 /// and the window controls go with it.
 pub fn sidebar_hidden(window: &WebviewWindow, hidden: bool) {

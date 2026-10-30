@@ -466,6 +466,11 @@ export const commands = {
 	 *  since the interface draws it beneath them.
 	 */
 	panelsSheet: (open: boolean) => __TAURI_INVOKE<OperationAdmission>("panels_sheet", { open }),
+	/**
+	 *  The panel strip began or stopped waiting at the window's edge; the edge
+	 *  is watched natively while it waits, since the page takes the pointer.
+	 */
+	panelsWatchEdge: (waiting: boolean) => __TAURI_INVOKE<void>("panels_watch_edge", { waiting }),
 	operationStatus: (operationId: string) => __TAURI_INVOKE<OperationStatus>("operation_status", { operationId }),
 	operationsReconcile: () => __TAURI_INVOKE<OperationDisposition[]>("operations_reconcile"),
 	operationAcknowledge: (operationId: string) => __TAURI_INVOKE<boolean>("operation_acknowledge", { operationId }),

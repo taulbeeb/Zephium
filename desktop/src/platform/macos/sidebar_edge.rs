@@ -18,8 +18,19 @@ use crate::edge_reach::at_edge;
 struct Edge {
     window: WebviewWindow,
     number: isize,
+    /// The trailing edge, where a waiting panel strip is, not the leading.
+    right: bool,
     near: bool,
     last: Option<f64>,
+}
+
+/// The event an edge reports on.
+fn edge_event(right: bool) -> &'static str {
+    if right {
+        "zephium:panel-edge"
+    } else {
+        "zephium:sidebar-edge"
+    }
 }
 
 thread_local! {
@@ -36,22 +47,30 @@ fn observe(event: &NSEvent) {
     };
     let number = window.windowNumber();
     let x = event.locationInWindow().x;
+    let width = window.frame().size.width;
     let changed = EDGES.with(|edges| {
-        let mut edges = edges.try_borrow_mut().ok()?;
-        let edge = edges.iter_mut().find(|edge| edge.number == number)?;
-        let step = edge.last.map_or(0.0, |last| x - last);
-        edge.last = Some(x);
-        let near = at_edge(x, step, edge.near);
-        (near != edge.near).then(|| {
-            edge.near = near;
-            (edge.window.clone(), near)
-        })
+        let Ok(mut edges) = edges.try_borrow_mut() else {
+            return Vec::new();
+        };
+        let mut changed = Vec::new();
+        for edge in edges.iter_mut().filter(|edge| edge.number == number) {
+            // Distance in from the edge watched, so both sides ask alike.
+            let x = if edge.right { width - x } else { x };
+            let step = edge.last.map_or(0.0, |last| x - last);
+            edge.last = Some(x);
+            let near = at_edge(x, step, edge.near);
+            if near != edge.near {
+                edge.near = near;
+                changed.push((edge.window.clone(), edge.right, near));
+            }
+        }
+        changed
     });
-    if let Some((window, near)) = changed {
+    for (window, right, near) in changed {
         crate::emit_to_privileged(
             window.app_handle(),
             window.label(),
-            "zephium:sidebar-edge",
+            edge_event(right),
             &serde_json::json!({ "near": near }),
         );
     }
@@ -59,6 +78,12 @@ fn observe(event: &NSEvent) {
 
 /// Starts or stops watching `window`'s left edge. Runs on the main thread.
 pub fn watch(window: &WebviewWindow, on: bool) {
+    watch_side(window, false, on);
+}
+
+/// Starts or stops watching one of `window`'s side edges. Runs on the main
+/// thread.
+pub fn watch_side(window: &WebviewWindow, right: bool, on: bool) {
     if MainThreadMarker::new().is_none() {
         return;
     }
@@ -69,11 +94,12 @@ pub fn watch(window: &WebviewWindow, on: bool) {
     let number = unsafe { &*(pointer as *const NSWindow) }.windowNumber();
     let watching = EDGES.with(|edges| {
         let mut edges = edges.borrow_mut();
-        edges.retain(|edge| edge.number != number);
+        edges.retain(|edge| edge.number != number || edge.right != right);
         if on {
             edges.push(Edge {
                 window: window.clone(),
                 number,
+                right,
                 near: false,
                 last: None,
             });

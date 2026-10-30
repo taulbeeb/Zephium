@@ -38,12 +38,15 @@
     }
   });
 
-  // A strip set to wait keeps only the window's edge. Reaching the edge
-  // brings it out; it goes back a moment after the pointer leaves it, or
-  // when the pointer never came onto it.
+  // A strip set to wait keeps only the window's edge. The page beside it
+  // takes the pointer, so native watches that edge and says when the
+  // pointer reaches it; the strip comes out, and goes back a moment after
+  // the pointer leaves it, or when the pointer never came onto it.
   const waiting = $derived(!!place && place.strip < PANEL_STRIP_WIDTH);
   const auto = $derived(preferences.value("panels.strip") === "auto");
+  const watched = $derived(auto && !!place);
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let pointerIn = false;
   const after = (ms: number, peek: boolean) => {
     clearTimeout(timer);
     timer = setTimeout(() => void tabs.peekPanelStrip(peek), ms);
@@ -51,8 +54,22 @@
   const stay = () => clearTimeout(timer);
   $effect(() => {
     if (!auto || waiting) return;
-    after(1200, false);
+    if (!pointerIn) after(1200, false);
     return stay;
+  });
+  $effect(() => {
+    if (!watched) return;
+    void tabs.watchPanelEdge(true);
+    const edge = (event: Event) => {
+      if (!(event instanceof CustomEvent) || typeof event.detail?.near !== "boolean") return;
+      if (event.detail.near) after(0, true);
+      else if (!pointerIn) after(450, false);
+    };
+    window.addEventListener("zephium:panel-edge", edge);
+    return () => {
+      window.removeEventListener("zephium:panel-edge", edge);
+      void tabs.watchPanelEdge(false);
+    };
   });
 
   let handledCommand = 0;
@@ -77,8 +94,18 @@
   <div
     class="strip-host"
     role="presentation"
-    onpointerenter={auto ? stay : undefined}
-    onpointerleave={auto ? () => after(450, false) : undefined}
+    onpointerenter={auto
+      ? () => {
+          pointerIn = true;
+          stay();
+        }
+      : undefined}
+    onpointerleave={auto
+      ? () => {
+          pointerIn = false;
+          after(450, false);
+        }
+      : undefined}
   >
     <WebPanelStrip
       width={place.strip}

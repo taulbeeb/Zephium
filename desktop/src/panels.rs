@@ -306,6 +306,16 @@ pub(crate) fn panels_peek_strip(
     dispatch(caller.app_handle(), &shell, PanelCommand::PeekStrip(peek))
 }
 
+/// The panel strip began or stopped waiting at the window's edge; the edge
+/// is watched natively while it waits, since the page takes the pointer.
+#[tauri::command]
+#[specta::specta]
+pub(crate) fn panels_watch_edge(caller: WebviewWindow, waiting: bool) {
+    if admitted(&caller, "panels_watch_edge") {
+        super::platform::imp::panel_edge(&caller, waiting);
+    }
+}
+
 /// The panel sheet opened or closed; pages step aside while it is open,
 /// since the interface draws it beneath them.
 #[tauri::command]
