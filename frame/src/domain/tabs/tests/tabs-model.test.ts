@@ -38,6 +38,33 @@ function snapshot(value: number, tabs: TabView[], active: string | null): ItemsS
   };
 }
 
+describe("web panels", () => {
+  it("a panel's page changes land on the panel and never join the tabs", () => {
+    const model = new TabProjectionModel();
+    model.applySnapshot({
+      ...snapshot(3, [tab("a", 1)], "a"),
+      web_panels: [{ tab: tab("p", 2), width: 400, open: true }],
+    });
+    expect(model.applyTab(tab("p", 5, { title: "Chat (3)" }))).toBe(true);
+    expect(model.value.web_panels?.[0]?.tab.title).toBe("Chat (3)");
+    expect(model.value.tabs.map((entry) => entry.id)).toEqual(["a"]);
+    // An older delta for the panel is refused like any tab's.
+    expect(model.applyTab(tab("p", 4, { title: "Stale" }))).toBe(false);
+    expect(model.value.web_panels?.[0]?.tab.title).toBe("Chat (3)");
+  });
+
+  it("a presentation of a panel keeps the active tab", () => {
+    const model = new TabProjectionModel();
+    model.applySnapshot({
+      ...snapshot(3, [tab("a", 1)], "a"),
+      web_panels: [{ tab: tab("p", 2), width: 400, open: true }],
+    });
+    model.applyPresentation({ tab: tab("p", 6, { url: "https://chat.example/x" }), active: "a" });
+    expect(model.value.active).toBe("a");
+    expect(model.value.web_panels?.[0]?.tab.url).toBe("https://chat.example/x");
+  });
+});
+
 describe("tab projection admission", () => {
   it("starts from the exact zero revision", () => {
     const state = initialItemsState();

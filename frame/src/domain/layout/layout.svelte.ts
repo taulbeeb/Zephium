@@ -1,5 +1,5 @@
 import { createLifecycle } from "$shared/lib/lifecycle";
-import type { DividerView, WorkPaneLayout } from "$shared/ipc/bindings";
+import type { DividerView, WebPanelLayout, WorkPaneLayout } from "$shared/ipc/bindings";
 import { commands } from "$shared/ipc/bindings";
 import { events } from "$shared/ipc/native-events";
 
@@ -28,12 +28,37 @@ function hole(pane: WorkPaneLayout | null): WorkPaneHole | null {
   };
 }
 
+/** The web panel strip and the open panel's docked rect, with finite geometry. */
+export type WebPanelPlace = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  strip: number;
+};
+
+function place(panel: WebPanelLayout | null | undefined): WebPanelPlace | null {
+  if (!panel) return null;
+  const values = [panel.x, panel.y, panel.width, panel.height, panel.strip];
+  if (values.some((value) => value === null || !Number.isFinite(value))) return null;
+  return {
+    x: panel.x!,
+    y: panel.y!,
+    width: panel.width!,
+    height: panel.height!,
+    strip: panel.strip!,
+  };
+}
+
 let dividerState = $state.raw<DividerView[]>([]);
+let webPanelState = $state.raw<WebPanelPlace | null>(null);
 let workPaneState = $state.raw<WorkPaneHole | null>(null);
 
 export const dividers = () => dividerState;
 /** The applied native hole of the Work browser pane, or null while no pane is shown. */
 export const workPane = () => workPaneState;
+/** The strip and the open panel while the profile has panels; width 0 while none is open. */
+export const webPanel = () => webPanelState;
 
 const lifecycle = createLifecycle();
 let initialized = false;
@@ -45,6 +70,7 @@ async function initialize(generation: number) {
     if (!lifecycle.isCurrent(generation)) return;
     dividerState = event.payload.dividers;
     workPaneState = hole(event.payload.work_pane);
+    webPanelState = place(event.payload.web_panel);
   });
 
   if (!lifecycle.isCurrent(generation)) {
@@ -83,6 +109,7 @@ export function dispose() {
   unlisten?.();
   unlisten = null;
   workPaneState = null;
+  webPanelState = null;
 }
 
 export const grab = (x: number, y: number) => void commands.dividerGrab(x, y);

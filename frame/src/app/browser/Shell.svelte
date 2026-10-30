@@ -68,6 +68,8 @@
     UtilityTray,
   } from "$features/sidebar";
   import { IS_WINDOWS } from "$shared/platform";
+  import { WebPanels } from "$features/panels";
+  import { layout } from "$domain/layout";
   import { installChromeMenu } from "$shared/lib/chrome-menu";
   import { tabs } from "$domain/tabs";
   import { preferences } from "$domain/preferences";
@@ -268,6 +270,17 @@
   // Beside a new tab the window, whatever it is made of, takes on the
   // sky's light; it gives it back as a page arrives.
   let skyShown = $derived(newTabShown && newTabImage() === null);
+  // While the profile has panels the chrome spans the window: the stage
+  // ends where the open panel, or else the strip, begins.
+  let innerWidth = $state(0);
+  let panelPlace = $derived(layout.webPanel());
+  let stageInset = $derived(
+    panelPlace === null
+      ? 0
+      : panelPlace.width > 0
+        ? Math.max(0, innerWidth - panelPlace.x)
+        : Math.max(0, panelPlace.strip - 8),
+  );
 
   $effect(() => {
     const tab = tabs.activeTab();
@@ -485,7 +498,10 @@
           />{/snippet}</LazyView
       >{/snippet}</Sidebar
   >
-  <div class="stage-column">
+  <div
+    class="stage-column"
+    style:margin-inline-end={stageInset > 0 ? `${stageInset}px` : undefined}
+  >
     {#if browserPage.navigationFailed()}<div class="navigation-error" role="alert">
         {m.browser_nav_failed()}
       </div>{/if}
@@ -655,7 +671,9 @@
       </main>
     {/if}
   </div>
+  {#if browserPage.currentPage() === null}<WebPanels />{/if}
 </div>
+<svelte:window bind:innerWidth />
 {#if ClearSiteData}<ClearSiteData />{/if}
 
 <style>

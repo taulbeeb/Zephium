@@ -18,6 +18,7 @@ export function initialItemsState(): ItemsState {
     active: null,
     split_group: null,
     containers: [],
+    web_panels: [],
   };
 }
 
@@ -50,7 +51,10 @@ export class TabProjectionModel {
     if (candidate.projection_revision <= this.#appliedGlobalRevision) return false;
 
     this.#appliedGlobalRevision = candidate.projection_revision;
-    for (const tab of candidate.tabs) {
+    for (const tab of [
+      ...candidate.tabs,
+      ...(candidate.web_panels ?? []).map((panel) => panel.tab),
+    ]) {
       const previous = this.#appliedTabRevisions.get(tab.id);
       if (previous === undefined || tab.projection_revision > previous) {
         this.#appliedTabRevisions.set(tab.id, tab.projection_revision);
@@ -75,8 +79,21 @@ export class TabProjectionModel {
       const tabs = this.#state.tabs.slice();
       tabs[index] = tab;
       this.#state = { ...this.#state, tabs };
+    } else {
+      this.#applyPanelTab(tab);
     }
     return true;
+  }
+
+  // A web panel is a tab that is never listed; its page changes arrive as
+  // the same deltas and land on the panel that shows it.
+  #applyPanelTab(tab: TabView) {
+    const panels = this.#state.web_panels ?? [];
+    const at = panels.findIndex((panel) => panel.tab.id === tab.id);
+    if (at === -1) return;
+    const web_panels = panels.slice();
+    web_panels[at] = { ...panels[at]!, tab };
+    this.#state = { ...this.#state, web_panels };
   }
 
   applyPresentation({ tab, active }: PresentationTab): boolean {
@@ -91,6 +108,7 @@ export class TabProjectionModel {
     const tabs = this.#state.tabs.slice();
     if (index !== -1) tabs[index] = tab;
     this.#state = { ...this.#state, tabs, active: current ? active : this.#state.active };
+    if (index === -1) this.#applyPanelTab(tab);
     return true;
   }
 

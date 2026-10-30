@@ -5,8 +5,10 @@ import type {
   ContainerView,
   ItemsState,
   SpaceLookInputV1,
+  PanelNavigationV1,
   TabMenuContext,
   TabView,
+  WebPanelView,
 } from "$shared/ipc/bindings";
 import { settle } from "$domain/operations";
 import { commands } from "$shared/ipc/bindings";
@@ -26,6 +28,10 @@ export const activeSpace = () => state.spaces.find((space) => space.id === state
 export const sidebarNodes = () => state.nodes;
 export const activeTab = (): TabView | undefined =>
   state.tabs.find((tab) => tab.id === state.active);
+/** The focused profile's web panels, in strip order. */
+export const webPanels = (): WebPanelView[] => state.web_panels ?? [];
+/** The panel shown beside the page, if one is open. */
+export const openPanel = (): WebPanelView | undefined => webPanels().find((panel) => panel.open);
 /** The focused profile's containers, in creation order. */
 export const containers = (): ContainerView[] => state.containers ?? [];
 /** The container a tab's pages use, if any. */
@@ -264,6 +270,20 @@ export const updateContainer = (id: string, name: string, color: number, symbol:
 export const deleteContainer = (id: string) => settle(commands.containersDelete(id));
 /** A new tab in the container, or in the profile's own store with null. */
 export const openContainerTab = (id: string | null) => settle(commands.containersOpenTab(id));
+/** Panel intents settle on native's answer; the projection carries the result. */
+export const addPanel = (url: string, container: string | null) =>
+  settle(commands.panelsAdd(url, container));
+export const removePanel = (id: string) => settle(commands.panelsRemove(id));
+export const movePanel = (id: string, before: string | null) =>
+  settle(commands.panelsMove(id, before));
+/** Shows a panel beside the page, or closes the open one with null. */
+export const openPanelBeside = (id: string | null) => settle(commands.panelsOpen(id));
+export const resizePanel = (id: string, width: number) => settle(commands.panelsResize(id, width));
+export const setPanelContainer = (id: string, container: string | null) =>
+  settle(commands.panelsSetContainer(id, container));
+export const loadPanel = (id: string, input: string) => settle(commands.panelsLoad(id, input));
+export const navigatePanel = (id: string, action: PanelNavigationV1) =>
+  settle(commands.panelsNavigate(id, action));
 /** The container a space's new tabs open in, or none with null. */
 export const setSpaceDefault = (space: string, container: string | null) =>
   settle(commands.containersSetSpaceDefault(space, container));

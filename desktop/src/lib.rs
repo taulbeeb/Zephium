@@ -3872,7 +3872,7 @@ fn execute_command(app: &tauri::AppHandle, id: &str) -> zephium_ipc::OperationAd
     // Sidebar presentation is privileged-chrome state persisted through the
     // settings allowlist, not an actor mutation. Deliver the intent and let
     // the frame own it.
-    if id == SIDEBAR_COMPACT_COMMAND {
+    if id == SIDEBAR_COMPACT_COMMAND || id == PANELS_NEW_COMMAND {
         return if try_emit_to_privileged(app, MAIN_LABEL, EVENT_UI, &id) {
             accepted_ui_operation()
         } else {
@@ -5686,6 +5686,7 @@ fn build_menu(
         .separator()
         .item(&item("sidebar.toggleCompact")?)
         .item(&item("panels.toggle")?)
+        .item(&item("panels.new")?)
         .item(&appearance)
         .separator()
         .item(&item("url.focus")?)
@@ -5837,6 +5838,9 @@ const TAB_MENU_CLEAR_SITE_DATA_COMMAND: &str = "tab.clearSiteData";
 
 /// Registry command delivered to the frame, which owns sidebar presentation.
 const SIDEBAR_COMPACT_COMMAND: &str = "sidebar.toggleCompact";
+/// Registry command delivered to the frame, which asks for the new panel's
+/// address.
+const PANELS_NEW_COMMAND: &str = "panels.new";
 
 /// The rail cannot show a navigation cluster, so the collapsed menu carries
 /// the whole one rather than a subset of it.
@@ -6032,6 +6036,7 @@ fn build_chrome_menu(
     let copy_link = item("page.copyLink", page)?;
     let second = PredefinedMenuItem::separator(handle)?;
     let split = item("split.choose", can_split)?;
+    let new_panel = item(PANELS_NEW_COMMAND, true)?;
     let compact = item(SIDEBAR_COMPACT_COMMAND, true)?;
     let third = PredefinedMenuItem::separator(handle)?;
     let bookmarks = item("tool.bookmarks", true)?;
@@ -6049,6 +6054,7 @@ fn build_chrome_menu(
         &copy_link,
         &second,
         &split,
+        &new_panel,
         &compact,
         &third,
         &bookmarks,

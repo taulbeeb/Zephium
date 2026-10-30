@@ -96,6 +96,10 @@
       "js": 388,
       "css": 0
     },
+    "lazy:features/panels/components/PanelSheet.svelte": {
+      "js": 73244,
+      "css": 1417
+    },
     "lazy:features/search/components/LauncherPanel.svelte": {
       "js": 107214,
       "css": 10642

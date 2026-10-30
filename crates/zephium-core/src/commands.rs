@@ -228,6 +228,7 @@ pub const REGISTRY: &[CommandSpec] = &[
         Keys::same("CmdOrCtrl+Shift+L"),
         Group::View,
     ),
+    command("panels.new", "Add Web Panel…", Keys::NONE, Group::View),
     command(
         "nav.reload",
         "Reload Page",

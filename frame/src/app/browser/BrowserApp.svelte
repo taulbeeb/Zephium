@@ -156,7 +156,7 @@
     if (ownsImport) browserImport.provide(nativeImportAdapter());
     void operations.init();
     void blocker.init();
-    if (!IS_MAC) void layout.init();
+    void layout.init();
     document.addEventListener("keydown", handleKeydown);
 
     void (async () => {
@@ -217,7 +217,7 @@
       keymap.dispose();
       findInPage.dispose();
       if (ownsImport) browserImport.provide(null);
-      if (!IS_MAC) layout.dispose();
+      layout.dispose();
       document.removeEventListener("keydown", handleKeydown);
     };
   });
