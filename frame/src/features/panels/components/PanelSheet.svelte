@@ -9,6 +9,10 @@
   import Checkbox from "$shared/ui/Checkbox";
   import Select from "$shared/ui/Select";
   import { containerHue } from "$shared/lib/container-hue";
+  import Icon from "$shared/ui/Icon";
+  import { UnavailableIcon } from "@hugeicons/core-free-icons";
+  import type { SpaceIconView } from "$shared/ipc/bindings";
+  import { SPACE_SYMBOLS, emojiOf } from "$features/tabs";
 
   let {
     open = $bindable(false),
@@ -27,6 +31,16 @@
   let unloadOnClose = $state(false);
   let unloadAfter = $state("never");
   let reloadEvery = $state("never");
+  let floating = $state(false);
+  let selector = $state("");
+  let icon = $state<SpaceIconView | null>(null);
+  let emoji = $state("");
+
+  function typeEmoji(text: string) {
+    emoji = text;
+    const found = emojiOf(text);
+    if (found) icon = { kind: "emoji", text: found };
+  }
 
   const unloadOptions = [
     { value: "never", label: m.panels_timer_never() },
@@ -76,6 +90,10 @@
       unloadOnClose = settings?.unload_on_close ?? false;
       unloadAfter = timer(settings?.unload_after_minutes ?? null);
       reloadEvery = timer(settings?.reload_every_seconds ?? null);
+      floating = settings?.floating ?? false;
+      selector = settings?.selector ?? "";
+      icon = settings?.icon ?? null;
+      emoji = icon?.kind === "emoji" ? icon.text : "";
     });
   });
 
@@ -101,6 +119,9 @@
         unload_on_close: unloadOnClose,
         unload_after_minutes: parsed(unloadAfter),
         reload_every_seconds: parsed(reloadEvery),
+        floating,
+        selector: selector.trim() || null,
+        icon,
       };
       if (ok) ok = settled((await tabs.configurePanel(panel.tab.id, settings)).outcome);
     }
@@ -188,7 +209,59 @@
             {m.panels_container_reload()}
           </p>{/if}
         {#if panel}
+          <div class="icons" role="radiogroup" aria-labelledby="panel-icon-label">
+            <div class="icons-head">
+              <span id="panel-icon-label">{m.panels_icon()}</span>
+              <input
+                class="emoji-field"
+                value={emoji}
+                oninput={(event) => typeEmoji(event.currentTarget.value)}
+                placeholder={m.space_emoji_short()}
+                aria-label={m.space_emoji_placeholder()}
+                data-on={icon?.kind === "emoji" || undefined}
+                maxlength={16}
+              />
+            </div>
+            <div class="symbols">
+              <button
+                type="button"
+                role="radio"
+                class="symbol symbol-none"
+                aria-checked={icon === null}
+                aria-label={m.panels_icon_site()}
+                title={m.panels_icon_site()}
+                onclick={() => (icon = null)}
+                ><Icon icon={UnavailableIcon} size={15} strokeWidth={1.6} /></button
+              >
+              {#each SPACE_SYMBOLS as symbol, index (index)}
+                <button
+                  type="button"
+                  role="radio"
+                  class="symbol"
+                  aria-checked={icon?.kind === "symbol" && icon.index === index}
+                  aria-label={m.space_symbol({ index: String(index + 1) })}
+                  onclick={() => (icon = { kind: "symbol", index })}
+                  ><Icon icon={symbol} size={15} strokeWidth={1.8} /></button
+                >
+              {/each}
+            </div>
+          </div>
           <div class="options">
+            <Checkbox
+              label={m.panels_floating()}
+              description={m.panels_floating_note()}
+              checked={floating}
+              onchange={(value) => (floating = value)}
+            />
+            <Field
+              label={m.panels_selector()}
+              placeholder={m.panels_selector_placeholder()}
+              autocomplete="off"
+              spellcheck="false"
+              maxlength={256}
+              bind:value={selector}
+            />
+            <p class="hint">{m.panels_selector_note()}</p>
             <Checkbox
               label={m.panels_mobile()}
               description={m.panels_mobile_note()}
@@ -316,6 +389,89 @@
   .options {
     display: grid;
     gap: 12px;
+  }
+
+  .hint {
+    margin: -6px 0 0;
+    color: var(--color-label-secondary);
+    font-size: var(--text-label);
+  }
+
+  .icons {
+    display: grid;
+    gap: 6px;
+  }
+
+  .icons-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--color-label-secondary);
+    font-size: var(--text-label);
+    font-weight: 500;
+  }
+
+  .emoji-field {
+    width: 64px;
+    height: 20px;
+    padding-inline: 8px;
+    border: 0;
+    border-radius: var(--radius-capsule);
+    background: var(--row-hover);
+    color: var(--color-text);
+    font: inherit;
+    font-size: var(--text-label);
+    text-align: center;
+    outline: none;
+  }
+
+  .emoji-field::placeholder {
+    color: var(--color-faint);
+  }
+
+  .emoji-field:focus,
+  .emoji-field[data-on] {
+    background: var(--row-active);
+  }
+
+  .emoji-field[data-on] {
+    box-shadow: inset 0 0 0 1px var(--color-accent);
+  }
+
+  .symbols {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(24px, 1fr));
+    gap: 1px;
+  }
+
+  .symbol {
+    display: grid;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-inset);
+    background: transparent;
+    color: var(--color-muted);
+    place-items: center;
+    transition:
+      background-color var(--motion-instant) var(--ease-out),
+      color var(--motion-instant) var(--ease-out);
+  }
+
+  .symbol-none {
+    color: var(--color-faint);
+  }
+
+  .symbol:hover,
+  .symbol:focus-visible {
+    outline: none;
+    background: var(--row-hover);
+    color: var(--color-text);
+  }
+
+  .symbol[aria-checked="true"] {
+    background: var(--row-active);
+    color: var(--color-text);
   }
 
   .timers {

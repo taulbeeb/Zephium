@@ -45,6 +45,9 @@ const noSettings = {
   unload_on_close: false,
   unload_after_minutes: null,
   reload_every_seconds: null,
+  floating: false,
+  selector: null,
+  icon: null,
 };
 
 describe("web panels", () => {

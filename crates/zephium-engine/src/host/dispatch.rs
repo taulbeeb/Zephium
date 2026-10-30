@@ -418,6 +418,7 @@ pub(crate) fn install(
             navigation_snapshots: HashMap::new(),
             partitions: HashMap::new(),
             mobile_views: Default::default(),
+            item_styles: HashMap::new(),
             profile_persistence_classes: HashMap::new(),
             content_policies: HashMap::new(),
             style_worker: None,

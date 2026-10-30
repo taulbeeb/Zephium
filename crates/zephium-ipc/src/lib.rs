@@ -644,6 +644,12 @@ pub struct WebPanelSettingsView {
     pub unload_on_close: bool,
     pub unload_after_minutes: Option<u32>,
     pub reload_every_seconds: Option<u32>,
+    /// Slides over the page instead of narrowing it.
+    pub floating: bool,
+    /// Shows only what this CSS selector finds.
+    pub selector: Option<String>,
+    /// Drawn on the strip instead of the site's icon.
+    pub icon: Option<SpaceIconView>,
 }
 
 /// Where the open web panel is docked, in window coordinates.

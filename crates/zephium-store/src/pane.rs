@@ -171,6 +171,9 @@ pub fn encode(pane: &Pane) -> StoredPane {
             axis: match axis {
                 Axis::Row => "row".into(),
                 Axis::Col => "col".into(),
+                // Composed at layout time and never kept; a stray one is
+                // refused on decode rather than read as a split.
+                Axis::Over => "over".into(),
             },
             ratio: *ratio,
             a: Box::new(encode(a)),

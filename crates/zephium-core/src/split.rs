@@ -8,6 +8,10 @@ use crate::ids::ItemId;
 pub enum Axis {
     Row,
     Col,
+    /// `b` floats over the trailing part of `a`, which keeps the whole rect;
+    /// `ratio` is where `b` starts. Composed for a floating web panel at
+    /// layout time and never stored.
+    Over,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -169,6 +173,38 @@ pub fn dock(tree: Pane, region: Rect, panel: ItemId, panel_rect: Rect, gap: f64)
     )
 }
 
+/// The tree keeps all of `region` and the panel floats over its trailing
+/// edge at `panel_rect`, drawn above the pages it covers.
+pub fn float(tree: Pane, region: Rect, panel: ItemId, panel_rect: Rect) -> Pane {
+    let start = if region.width > 0.0 {
+        (panel_rect.x - region.x) / region.width
+    } else {
+        0.0
+    };
+    Pane::Branch {
+        axis: Axis::Over,
+        ratio: start,
+        a: Box::new(tree),
+        b: Box::new(Pane::Leaf(panel)),
+    }
+}
+
+/// The leaves that float over others, which a stage draws above them.
+pub fn floating(root: &Pane) -> Vec<ItemId> {
+    let mut out = Vec::new();
+    let mut stack = vec![root];
+    while let Some(pane) = stack.pop() {
+        if let Pane::Branch { axis, a, b, .. } = pane {
+            if *axis == Axis::Over {
+                out.extend(b.tabs());
+            }
+            stack.push(a);
+            stack.push(b);
+        }
+    }
+    out
+}
+
 pub fn layout(root: &Pane, region: Rect, gap: f64) -> Vec<(ItemId, Rect)> {
     let mut out = Vec::new();
     place(root, region, gap, &mut out);
@@ -191,21 +227,30 @@ pub fn dividers(tree: &Pane, region: Rect, gap: f64) -> Vec<Divider> {
             return;
         };
         let (ra, rb) = divide(rect, *axis, *ratio, gap);
+        // Nothing divides a floating pane from the one beneath it.
         let strip = match axis {
-            Axis::Row => Rect::new(ra.x + ra.width, rect.y, rb.x - ra.x - ra.width, rect.height),
-            Axis::Col => Rect::new(
+            Axis::Over => None,
+            Axis::Row => Some(Rect::new(
+                ra.x + ra.width,
+                rect.y,
+                rb.x - ra.x - ra.width,
+                rect.height,
+            )),
+            Axis::Col => Some(Rect::new(
                 rect.x,
                 ra.y + ra.height,
                 rect.width,
                 rb.y - ra.y - ra.height,
-            ),
+            )),
         };
-        out.push(Divider {
-            path: path.clone(),
-            axis: *axis,
-            rect,
-            strip,
-        });
+        if let Some(strip) = strip {
+            out.push(Divider {
+                path: path.clone(),
+                axis: *axis,
+                rect,
+                strip,
+            });
+        }
         path.push(0);
         walk(a, ra, gap, path, out);
         path.pop();
@@ -271,9 +316,10 @@ pub struct Drop {
 }
 
 pub fn drop_target(tree: &Pane, region: Rect, gap: f64, x: f64, y: f64) -> Option<Drop> {
+    // Later leaves draw over earlier ones, so the last hit is on top.
     let (tab, r) = layout(tree, region, gap)
         .into_iter()
-        .find(|(_, r)| x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height)?;
+        .rfind(|(_, r)| x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height)?;
     if r.width <= 0.0 || r.height <= 0.0 {
         return None;
     }
@@ -290,7 +336,7 @@ pub fn drop_target(tree: &Pane, region: Rect, gap: f64, x: f64, y: f64) -> Optio
     let (first, second) = divide(r, edge.axis(), 0.5, gap);
     let zone = if edge.before() { first } else { second };
     let shift = match edge.axis() {
-        Axis::Row => {
+        Axis::Row | Axis::Over => {
             let distance = zone.width + gap;
             (if edge.before() { distance } else { -distance }, 0.0)
         }
@@ -310,6 +356,7 @@ pub fn drop_target(tree: &Pane, region: Rect, gap: f64, x: f64, y: f64) -> Optio
 pub fn ratio_for(axis: Axis, rect: Rect, gap: f64, px: f64, py: f64) -> f64 {
     let (offset, available) = match axis {
         Axis::Row => (px - rect.x, rect.width - gap),
+        Axis::Over => (px - rect.x, rect.width),
         Axis::Col => (py - rect.y, rect.height - gap),
     };
     if !offset.is_finite() || !available.is_finite() || available <= 0.0 {
@@ -355,6 +402,13 @@ fn divide(r: Rect, axis: Axis, ratio: f64, gap: f64) -> (Rect, Rect) {
             (
                 Rect::new(r.x, r.y, r.width, ah),
                 Rect::new(r.x, r.y + ah + gap, r.width, avail - ah),
+            )
+        }
+        Axis::Over => {
+            let start = r.width.max(0.0) * ratio;
+            (
+                r,
+                Rect::new(r.x + start, r.y, r.width.max(0.0) - start, r.height),
             )
         }
     }
@@ -404,6 +458,34 @@ mod tests {
         for (leaf, rect) in alone {
             assert!(close(rect_of(leaf), rect), "{leaf:?}");
         }
+    }
+
+    #[test]
+    fn a_floating_panel_overlaps_the_tree_which_keeps_its_rect() {
+        let tree = Pane::Branch {
+            axis: Axis::Row,
+            ratio: 0.5,
+            a: Box::new(Pane::Leaf(id(1))),
+            b: Box::new(Pane::Leaf(id(2))),
+        };
+        let region = Rect::new(0.0, 0.0, 1000.0, 600.0);
+        let panel = Rect::new(600.0, 0.0, 400.0, 600.0);
+        let floated = float(tree.clone(), region, id(9), panel);
+        let placed = layout(&floated, region, 8.0);
+        let beneath = layout(&tree, region, 8.0);
+        assert_eq!(&placed[..2], &beneath[..]);
+        assert_eq!(placed[2], (id(9), panel));
+        assert_eq!(floating(&floated), vec![id(9)]);
+        assert!(floating(&tree).is_empty());
+        // The page's own divider stays; none is drawn at the panel's edge.
+        assert_eq!(dividers(&floated, region, 8.0).len(), 1);
+        // A drop lands on the floating panel where it covers the page.
+        assert_eq!(
+            drop_target(&floated, region, 8.0, 900.0, 300.0)
+                .unwrap()
+                .tab,
+            id(9)
+        );
     }
 
     #[test]
@@ -497,7 +579,7 @@ mod tests {
         };
         *axis = match *axis {
             Axis::Row => Axis::Col,
-            Axis::Col => Axis::Row,
+            Axis::Col | Axis::Over => Axis::Row,
         };
         assert!(!original.same_topology(&axis_changed));
 

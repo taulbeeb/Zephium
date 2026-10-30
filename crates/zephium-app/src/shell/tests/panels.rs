@@ -427,3 +427,62 @@ fn timers_put_an_idle_closed_panel_to_sleep_and_reload_an_awake_one() {
     assert!(shell.items.tab(busy).unwrap().has_view());
     assert!(engine.calls().contains(&format!("reload {busy}")));
 }
+
+#[test]
+fn a_floating_panel_leaves_the_page_its_width_and_isolates_its_selector() {
+    let (mut shell, engine, screen, _store) = browsed();
+    let tab = active_id(&screen);
+    navigate_and_commit(&mut shell, tab, "news.example");
+    let panel = add(&mut shell, "chat.example");
+    assert!(done(panel_op(
+        &mut shell,
+        PanelCommand::Configure {
+            id: panel,
+            settings: zephium_core::panels::PanelSettings {
+                floating: true,
+                selector: Some("#messages".into()),
+                icon: Some(zephium_core::spaces::SpaceIcon::Emoji("💬".into())),
+                ..Default::default()
+            },
+        },
+    )));
+    let window = shell.windows.focused().unwrap();
+    let metrics = shell.layout_metrics(window);
+    assert!(metrics.panel_floats);
+    let page = layout::compute(window.size, window.mode, metrics, true)
+        .content
+        .unwrap();
+    // The page keeps its own region; the panel is drawn over its edge.
+    let floating = engine
+        .layout_regions
+        .lock()
+        .unwrap()
+        .last()
+        .copied()
+        .flatten();
+    assert_eq!(floating, Some(page));
+    let beside = layout::Metrics {
+        panel_floats: false,
+        ..metrics
+    };
+    let narrowed = layout::compute(window.size, window.mode, beside, true)
+        .content
+        .unwrap();
+    assert!(narrowed.width + metrics.panel <= page.width);
+    assert!(layouts(&engine)
+        .pop()
+        .unwrap()
+        .ends_with(&format!("{tab},{panel}")));
+    assert!(engine.calls().contains(&format!("style {panel} true")));
+    let view = &last(&screen).web_panels[0].settings;
+    assert!(view.floating);
+    assert_eq!(view.selector.as_deref(), Some("#messages"));
+    assert_eq!(
+        view.icon,
+        Some(zephium_ipc::SpaceIconView::Emoji {
+            text: "💬".into()
+        })
+    );
+    assert!(done(panel_op(&mut shell, PanelCommand::Remove(panel))));
+    assert!(engine.calls().contains(&format!("style {panel} false")));
+}

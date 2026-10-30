@@ -81,6 +81,11 @@ export const architecture = {
             allow: { to: { element: { type: "features", captured: { module: "downloads" } } } },
           },
           {
+            // A panel's icon is drawn and chosen as a space's is.
+            from: { element: { type: "features", captured: { module: "panels" } } },
+            allow: { to: { element: { type: "features", captured: { module: "tabs" } } } },
+          },
+          {
             from: { file: { categories: "entry" } },
             allow: { to: element(["app", "shared", "styles"]) },
           },

@@ -2321,6 +2321,11 @@ impl Engine for WebviewEngine {
             let _ = host::try_with(move |host| host.set_mobile_user_agent(id, mobile));
         });
     }
+    fn set_item_style(&self, id: ItemId, css: Option<Arc<str>>) {
+        let _ = self.run(move || {
+            let _ = host::try_with(move |host| host.set_item_style(id, css));
+        });
+    }
     fn set_page_style(&self, profile: ProfileId, site: String, css: Arc<str>) {
         let _ = self.run(move || {
             let _ = host::try_with(move |host| host.set_page_style(profile, site, css));

@@ -1246,6 +1246,8 @@ struct NativePlacement {
     show: bool,
     radius: i32,
     fullscreen: bool,
+    /// Floats over the pages beneath it, so it is raised above them.
+    floating: bool,
     screen_origin: Option<(i32, i32)>,
     applied: AppliedPlacement,
     delta: PlacementDelta,
@@ -1496,6 +1498,7 @@ fn sync(state: &Rc<RefCell<State>>) {
     let scale = scale_of(parent);
     let local = Rect::new(0.0, 0.0, size.0, size.1);
     let radius = ((RADIUS * scale * 2.0).round() as i32).max(1);
+    let floating = tree.as_ref().map(split::floating).unwrap_or_default();
     let pane_rects = tree
         .as_ref()
         .map(|tree| split::layout(tree, local, gap))
@@ -1549,6 +1552,11 @@ fn sync(state: &Rc<RefCell<State>>) {
                     delta.window_visibility = true;
                     delta.controller_visibility = true;
                 }
+                // A page made since may have been stacked over it.
+                let floats = floating.contains(&id);
+                if floats && show {
+                    delta.raise = true;
+                }
                 (!delta.is_empty()).then(|| NativePlacement {
                     id,
                     serial: view.serial,
@@ -1559,6 +1567,7 @@ fn sync(state: &Rc<RefCell<State>>) {
                     show,
                     radius,
                     fullscreen,
+                    floating: floats,
                     screen_origin: parent_screen_origin,
                     applied,
                     delta,
@@ -1925,7 +1934,7 @@ fn apply_native_placement(state: &Rc<RefCell<State>>, placement: &NativePlacemen
         }
     }
     if placement.delta.raise {
-        if !placement.fullscreen {
+        if !placement.fullscreen && !placement.floating {
             applied.raised = Some(false);
         } else if unsafe {
             SetWindowPos(

@@ -58,6 +58,48 @@ pub struct PanelSettings {
     /// Reload the page this often while it is awake.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reload_every_seconds: Option<u32>,
+    /// Slide over the page instead of narrowing it.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub floating: bool,
+    /// Show only the element this CSS selector finds, filling the panel.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selector: Option<String>,
+    /// Drawn on the strip instead of the site's icon.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<crate::spaces::SpaceIcon>,
+}
+
+pub const MAX_PANEL_SELECTOR_BYTES: usize = 256;
+
+/// A selector that can stand in a style sheet without ending its rule or
+/// reaching past it: no braces, semicolons, comments, at-rules, escapes or
+/// unbalanced quotes. The page's own engine still decides whether it parses.
+pub fn selector_allowed(selector: &str) -> bool {
+    !selector.is_empty()
+        && selector.len() <= MAX_PANEL_SELECTOR_BYTES
+        && !selector.contains("/*")
+        && !selector.contains("*/")
+        && selector
+            .chars()
+            .all(|c| !c.is_control() && !matches!(c, '{' | '}' | ';' | '@' | '\\' | '<'))
+        && selector.matches('"').count().is_multiple_of(2)
+        && selector.matches('\'').count().is_multiple_of(2)
+}
+
+/// The style that leaves only what `selector` matches in sight, filling
+/// the panel. Everything else keeps its layout but is not drawn.
+pub fn isolation_style(selector: &str) -> Option<String> {
+    selector_allowed(selector).then(|| {
+        format!(
+            "html,body{{visibility:hidden!important;overflow:hidden!important}}\
+             {selector}{{visibility:visible!important;position:fixed!important;\
+             inset:0!important;width:auto!important;height:auto!important;\
+             max-width:none!important;max-height:none!important;margin:0!important;\
+             overflow:auto!important;z-index:2147483647!important;\
+             background:Canvas!important}}\
+             :is({selector}) *{{visibility:visible!important}}"
+        )
+    })
 }
 
 fn is_false(value: &bool) -> bool {
@@ -80,8 +122,15 @@ impl PanelSettings {
             let name = name.trim().to_owned();
             (!name.is_empty()).then_some(name)
         });
+        let selector = self
+            .selector
+            .map(|selector| selector.trim().to_owned())
+            .filter(|selector| selector_allowed(selector));
+        let icon = self.icon.filter(crate::spaces::SpaceIcon::valid);
         Self {
             name,
+            selector,
+            icon,
             unload_after_minutes: self
                 .unload_after_minutes
                 .map(|m| m.clamp(MIN_UNLOAD_AFTER_MINUTES, MAX_UNLOAD_AFTER_MINUTES)),
@@ -141,6 +190,12 @@ impl Panels {
     }
 
     /// A panel's settings; the default for one never configured.
+    pub fn floats(&self, panel: ItemId) -> bool {
+        self.settings
+            .get(&panel)
+            .is_some_and(|settings| settings.floating)
+    }
+
     pub fn settings(&self, panel: ItemId) -> PanelSettings {
         self.settings.get(&panel).cloned().unwrap_or_default()
     }
@@ -191,6 +246,49 @@ mod tests {
         assert!(panels.set_width(id, f64::NAN));
         assert_eq!(panels.widths().count(), 0);
         assert_eq!(clamp_panel_width(512.4), 512);
+    }
+
+    #[test]
+    fn only_a_selector_that_stays_in_its_rule_is_kept() {
+        for good in [
+            "#chat",
+            "main > .feed",
+            r#"[data-id="a b"]"#,
+            "div:nth-child(2)",
+        ] {
+            assert!(selector_allowed(good), "{good}");
+            assert!(isolation_style(good).unwrap().contains(good));
+        }
+        for bad in [
+            "",
+            "a{}",
+            "a;b",
+            "a /* x */",
+            "@import x",
+            r"a\7b",
+            r#"[x="y]"#,
+            "a\nb",
+            "</style>",
+        ] {
+            assert!(!selector_allowed(bad), "{bad}");
+            assert_eq!(isolation_style(bad), None);
+        }
+        assert!(!selector_allowed(&"a".repeat(MAX_PANEL_SELECTOR_BYTES + 1)));
+        let mut panels = Panels::default();
+        let id = ItemId::from(1);
+        panels.set_settings(
+            id,
+            PanelSettings {
+                selector: Some("  #main  ".into()),
+                icon: Some(crate::spaces::SpaceIcon::Symbol(200)),
+                floating: true,
+                ..PanelSettings::default()
+            },
+        );
+        let kept = panels.settings(id);
+        assert_eq!(kept.selector.as_deref(), Some("#main"));
+        assert_eq!(kept.icon, None);
+        assert!(panels.floats(id));
     }
 
     #[test]

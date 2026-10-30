@@ -19,7 +19,7 @@ pub(super) struct SpaceMemory {
     last: HashMap<ProfileId, SpaceId>,
 }
 
-fn icon_view(icon: &SpaceIcon) -> SpaceIconView {
+pub(super) fn icon_view(icon: &SpaceIcon) -> SpaceIconView {
     match icon {
         SpaceIcon::Symbol(index) => SpaceIconView::Symbol { index: *index },
         SpaceIcon::Emoji(text) => SpaceIconView::Emoji { text: text.clone() },

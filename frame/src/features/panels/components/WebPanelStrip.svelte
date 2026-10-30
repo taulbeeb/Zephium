@@ -9,6 +9,8 @@
     ArrowReloadHorizontalIcon,
     MinusSignIcon,
     PlusSignIcon,
+    PinIcon,
+    PinOffIcon,
   } from "@hugeicons/core-free-icons";
   import type { WebPanelView } from "$shared/ipc/bindings";
   import { tabs } from "$domain/tabs";
@@ -16,6 +18,7 @@
   import FavIcon from "$shared/ui/FavIcon";
   import IconButton from "$shared/ui/IconButton";
   import { containerHue } from "$shared/lib/container-hue";
+  import { SpaceGlyph } from "$features/tabs";
   import { badgeText, unreadCount } from "../lib/badge";
 
   let {
@@ -46,6 +49,14 @@
 
   function choose(panel: WebPanelView) {
     void tabs.openPanelBeside(panel.open ? null : panel.tab.id);
+  }
+
+  // Pinned beside the page, or sliding over it.
+  function pin(panel: WebPanelView) {
+    void tabs.configurePanel(panel.tab.id, {
+      ...panel.settings,
+      floating: !panel.settings.floating,
+    });
   }
 
   function edit(event: MouseEvent, panel: WebPanelView) {
@@ -99,15 +110,19 @@
             over = null;
           }}
         >
-          <FavIcon
-            image={favicons.image(panel.tab.icon)}
-            tone={favicons.tone(panel.tab.icon)}
-            loading={panel.tab.loading}
-            size={18}
-            lit
-            fallback={Globe02Icon}
-            notched={!!panel.tab.audio}
-          />
+          {#if panel.settings.icon}<SpaceGlyph
+              icon={panel.settings.icon}
+              color={0}
+              size={18}
+            />{:else}<FavIcon
+              image={favicons.image(panel.tab.icon)}
+              tone={favicons.tone(panel.tab.icon)}
+              loading={panel.tab.loading}
+              size={18}
+              lit
+              fallback={Globe02Icon}
+              notched={!!panel.tab.audio}
+            />{/if}
           {#if panel.tab.audio}<span class="audio" aria-hidden="true"></span>{/if}
           {#if unreadCount(panel.tab.title) > 0}<span class="badge" aria-hidden="true"
               >{badgeText(unreadCount(panel.tab.title))}</span
@@ -162,6 +177,11 @@
         icon={MinusSignIcon}
         label={m.panels_zoom_out()}
         onclick={() => void tabs.zoomPanel(open.tab.id, "out")}
+      />
+      <IconButton
+        icon={open.settings.floating ? PinIcon : PinOffIcon}
+        label={open.settings.floating ? m.panels_dock() : m.panels_float()}
+        onclick={() => pin(open)}
       />
       <IconButton
         icon={Cancel01Icon}

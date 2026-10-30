@@ -28,6 +28,9 @@ pub(crate) struct PanelSettingsInputV1 {
     unload_on_close: bool,
     unload_after_minutes: Option<u32>,
     reload_every_seconds: Option<u32>,
+    floating: bool,
+    selector: Option<String>,
+    icon: Option<zephium_ipc::SpaceIconView>,
 }
 
 #[derive(Clone, Copy, Debug, serde::Deserialize, specta::Type)]
@@ -237,7 +240,16 @@ pub(crate) fn panels_configure(
     let name_ok = settings
         .name
         .as_deref()
-        .is_none_or(|name| super::bounded(name, super::MAX_PROFILE_NAME_BYTES));
+        .is_none_or(|name| super::bounded(name, super::MAX_PROFILE_NAME_BYTES))
+        && settings.selector.as_deref().is_none_or(|selector| {
+            super::bounded(selector, zephium_core::panels::MAX_PANEL_SELECTOR_BYTES)
+        });
+    let icon = settings.icon.map(|icon| match icon {
+        zephium_ipc::SpaceIconView::Symbol { index } => {
+            zephium_core::spaces::SpaceIcon::Symbol(index)
+        }
+        zephium_ipc::SpaceIconView::Emoji { text } => zephium_core::spaces::SpaceIcon::Emoji(text),
+    });
     match panel_of(&panel).filter(|_| admitted(&caller, "panels_configure") && name_ok) {
         Some(id) => dispatch(
             caller.app_handle(),
@@ -251,6 +263,9 @@ pub(crate) fn panels_configure(
                     unload_on_close: settings.unload_on_close,
                     unload_after_minutes: settings.unload_after_minutes,
                     reload_every_seconds: settings.reload_every_seconds,
+                    floating: settings.floating,
+                    selector: settings.selector,
+                    icon,
                 },
             },
         ),

@@ -24,6 +24,8 @@ pub struct Metrics {
     pub panel_strip: f64,
     /// The open web panel's width; zero while none is open.
     pub panel: f64,
+    /// The open panel floats over the page instead of narrowing it.
+    pub panel_floats: bool,
 }
 
 impl Default for Metrics {
@@ -36,6 +38,7 @@ impl Default for Metrics {
             sidebar_hidden: false,
             panel_strip: 0.0,
             panel: 0.0,
+            panel_floats: false,
         }
     }
 }
@@ -157,7 +160,10 @@ fn sidebar(win: Size, m: Metrics, content_present: bool) -> Layout {
     let top = p + m.caption;
     let height = inner_h - m.caption;
     let panel = docked_panel(content_x, right, top, height, m);
-    let content_right = panel.map_or(right, |panel| panel.x - m.gap);
+    let content_right = match panel {
+        Some(panel) if !m.panel_floats => panel.x - m.gap,
+        _ => right,
+    };
 
     if !content_present {
         return Layout {
@@ -195,7 +201,14 @@ fn docked_panel(left: f64, right: f64, top: f64, height: f64, m: Metrics) -> Opt
     if !(m.panel.is_finite() && m.panel > 0.0) {
         return None;
     }
-    let room = right - left - m.gap - MIN_CONTENT_BESIDE_PANEL;
+    // Floating, the page keeps its width beneath, so the panel needs only
+    // to leave some of it in sight.
+    let keep = if m.panel_floats {
+        MIN_CONTENT_BESIDE_PANEL / 2.0
+    } else {
+        MIN_CONTENT_BESIDE_PANEL
+    };
+    let room = right - left - m.gap - keep;
     let width = m.panel.min(room);
     (width >= f64::from(crate::panels::MIN_PANEL_WIDTH) && height > 0.0)
         .then(|| Rect::new(right - width, top, width, height))
@@ -223,6 +236,7 @@ mod tests {
         gap: 8.0,
         caption: 0.0,
         sidebar_hidden: false,
+        panel_floats: false,
     };
 
     #[test]
@@ -251,6 +265,26 @@ mod tests {
         let blank = compute(window, Mode::Sidebar, m, false);
         assert_eq!(blank.content, None);
         assert_eq!(blank.panel, l.panel);
+    }
+
+    #[test]
+    fn a_floating_panel_leaves_the_page_its_width() {
+        let docked = Metrics {
+            panel_strip: 48.0,
+            panel: 400.0,
+            ..M
+        };
+        let floats = Metrics {
+            panel_floats: true,
+            ..docked
+        };
+        let size = Size::new(1200.0, 800.0);
+        let beside = sidebar(size, docked, true);
+        let over = sidebar(size, floats, true);
+        assert_eq!(over.panel, beside.panel);
+        let content = over.content.unwrap();
+        assert_eq!(content.x + content.width, 1200.0 - 48.0);
+        assert!(beside.content.unwrap().width < content.width);
     }
 
     #[test]

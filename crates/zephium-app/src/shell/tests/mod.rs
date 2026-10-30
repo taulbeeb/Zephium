@@ -595,6 +595,9 @@ impl Engine for FakeEngine {
     fn set_mobile_user_agent(&self, id: ItemId, mobile: bool) {
         self.log(format!("mobile {id} {mobile}"));
     }
+    fn set_item_style(&self, id: ItemId, css: Option<std::sync::Arc<str>>) {
+        self.log(format!("style {id} {}", css.is_some()));
+    }
     fn retain_container_data(
         &self,
         profile: ProfileId,

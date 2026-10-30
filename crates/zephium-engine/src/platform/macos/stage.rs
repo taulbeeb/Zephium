@@ -102,7 +102,7 @@ impl DragCursor {
     #[allow(deprecated)]
     fn new(window: Retained<NSWindow>, axis: split::Axis) -> Self {
         let cursor = match axis {
-            split::Axis::Row => NSCursor::resizeLeftRightCursor(),
+            split::Axis::Row | split::Axis::Over => NSCursor::resizeLeftRightCursor(),
             split::Axis::Col => NSCursor::resizeUpDownCursor(),
         };
         let restore_rects = window.areCursorRectsEnabled();
@@ -245,7 +245,7 @@ define_class!(
             let h = self.bounds().size.height;
             if let Some(tree) = tree {
                 for d in split::dividers(&tree, self.region(), self.ivars().gap.get()).into_iter().take(7) {
-                    let cursor = match d.axis { split::Axis::Row => NSCursor::resizeLeftRightCursor(), split::Axis::Col => NSCursor::resizeUpDownCursor() };
+                    let cursor = match d.axis { split::Axis::Row | split::Axis::Over => NSCursor::resizeLeftRightCursor(), split::Axis::Col => NSCursor::resizeUpDownCursor() };
                     self.addCursorRect_cursor(NSRect::new(NSPoint::new(d.strip.x, h - d.strip.y - d.strip.height), NSSize::new(d.strip.width, d.strip.height)), &cursor);
                 }
             }
@@ -1905,6 +1905,7 @@ impl ContentStage {
                 drop(current);
                 self.ivars().paintable_changed.set(changed);
                 self.ivars().geometry_pending.set(false);
+                self.stack_floating(&tree);
                 self.sync_divider_tracking();
                 // SAFETY: native cursor invalidation uses this main-thread view.
                 if let Some(window) = self.window() {
@@ -1918,6 +1919,78 @@ impl ContentStage {
         }
         self.defer_stage_retry(true);
         false
+    }
+
+    /// Draws a floating pane, with its paint cover, above every other page
+    /// and cover, keeping the stage's other subviews where they are. The
+    /// views are reordered in place, never taken out of the window.
+    fn stack_floating(&self, tree: &Pane) {
+        let floating = split::floating(tree);
+        if floating.is_empty() {
+            return;
+        }
+        let (Ok(views), Ok(covers)) = (
+            self.ivars().views.try_borrow(),
+            self.ivars().covers.try_borrow(),
+        ) else {
+            return;
+        };
+        let addr = |view: &NSView| std::ptr::from_ref(view).addr();
+        let mut pages = HashMap::new();
+        for (id, host) in views.iter() {
+            pages.insert(addr(&host.view), (floating.contains(id), 0));
+        }
+        for (id, cover) in covers.iter() {
+            pages.insert(addr(&cover.view), (floating.contains(id), 1));
+        }
+        drop(views);
+        drop(covers);
+        let order: Vec<Retained<NSView>> = self.subviews().to_vec();
+        let top = order
+            .iter()
+            .enumerate()
+            .filter(|(_, view)| matches!(pages.get(&addr(view)), Some((false, _))))
+            .map(|(index, _)| index)
+            .max();
+        let Some(top) = top else {
+            return;
+        };
+        let sunk = order
+            .iter()
+            .enumerate()
+            .any(|(index, view)| index < top && matches!(pages.get(&addr(view)), Some((true, _))));
+        if !sunk {
+            return;
+        }
+        let ranks: HashMap<usize, usize> = order
+            .iter()
+            .enumerate()
+            .map(|(index, view)| {
+                let rank = match pages.get(&addr(view)) {
+                    Some((true, layer)) => top * 4 + 1 + layer,
+                    _ => index * 4,
+                };
+                (addr(view), rank)
+            })
+            .collect();
+        unsafe extern "C-unwind" fn by_rank(
+            a: NonNull<NSView>,
+            b: NonNull<NSView>,
+            ranks: *mut std::ffi::c_void,
+        ) -> objc2_foundation::NSComparisonResult {
+            // SAFETY: `ranks` is the map below, alive for the whole sort.
+            let ranks = unsafe { &*(ranks as *const HashMap<usize, usize>) };
+            let rank = |view: NonNull<NSView>| ranks.get(&view.addr().get()).copied();
+            rank(a).cmp(&rank(b)).into()
+        }
+        // SAFETY: the comparator reads only `ranks`, which outlives the call;
+        // AppKit sorts the subviews array in place.
+        unsafe {
+            self.sortSubviewsUsingFunction_context(
+                by_rank,
+                std::ptr::from_ref(&ranks) as *mut std::ffi::c_void,
+            );
+        }
     }
 
     fn sync_visibility(&self) -> bool {
@@ -2266,7 +2339,7 @@ fn feedback_rect(divider: &Divider, dragging: bool) -> Rect {
     let r = divider.rect;
     let strip = divider.strip;
     match divider.axis {
-        split::Axis::Row => {
+        split::Axis::Row | split::Axis::Over => {
             let height = if dragging {
                 r.height
             } else {

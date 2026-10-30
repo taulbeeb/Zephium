@@ -553,6 +553,8 @@ pub(crate) struct EngineHost {
     partitions: HashMap<ItemId, Partition>,
     /// Items whose views ask sites for their phone layout.
     mobile_views: std::collections::HashSet<ItemId>,
+    /// A panel's own style, added to its page style.
+    item_styles: HashMap<ItemId, Arc<str>>,
     // A ProfileId can never change between disk-backed and ephemeral native
     // storage in one process. Closing, crashing, or erasing a profile does not
     // relax this binding and therefore cannot resurrect a UDF in private mode.

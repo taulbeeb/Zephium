@@ -767,6 +767,11 @@ pub trait Engine {
     /// desktop one again. It takes effect when the next view is built; the
     /// shell rebuilds a live view to apply it.
     fn set_mobile_user_agent(&self, _id: ItemId, _mobile: bool) {}
+    /// A style of the browser's own for one item's documents, applied with
+    /// the page styles and kept across rebuilds of its view; none removes
+    /// it. Built by the shell from a validated panel selector, never page
+    /// text.
+    fn set_item_style(&self, _id: ItemId, _css: Option<Arc<str>>) {}
     /// Browser-owned file actions. Only trusted Shell admission supplies the
     /// profile partition; the caller supplies IDs, never filesystem paths.
     fn download_call(

@@ -30,6 +30,13 @@ impl PanelTimers {
     }
 }
 
+/// The style that shows only what a panel's selector finds.
+fn isolation_css(selector: Option<&str>) -> Option<std::sync::Arc<str>> {
+    selector
+        .and_then(zephium_core::panels::isolation_style)
+        .map(std::sync::Arc::from)
+}
+
 fn rejected(reason: OperationReason) -> OperationDisposition {
     operation_result(OperationOutcome::Rejected, reason)
 }
@@ -234,6 +241,7 @@ impl Shell {
         self.panel_timers.closed_at.remove(&id);
         self.panel_timers.reloaded_at.remove(&id);
         self.engine.set_mobile_user_agent(id, false);
+        self.engine.set_item_style(id, None);
         self.cancel_page_permission_for_item(id);
         self.forget_page_permission_documents_of_item(id);
         self.cancel_pending_presentation(id);
@@ -319,11 +327,17 @@ impl Shell {
         if !self.panel_in_scope(id, profile) {
             return rejected(OperationReason::InvalidScope);
         }
-        let was_mobile = self.panels.settings(id).mobile;
+        let before = self.panels.settings(id);
+        let was_mobile = before.mobile;
         if !self.panels.set_settings(id, settings) {
             return unchanged();
         }
-        let mobile = self.panels.settings(id).mobile;
+        let after = self.panels.settings(id);
+        let mobile = after.mobile;
+        if after.selector != before.selector {
+            self.engine
+                .set_item_style(id, isolation_css(after.selector.as_deref()));
+        }
         let mut effects = Vec::new();
         if mobile != was_mobile {
             self.engine.set_mobile_user_agent(id, mobile);
@@ -482,6 +496,7 @@ impl Shell {
         }
         if let Some(id) = self.shown_panel() {
             metrics.panel = f64::from(self.panels.width(id));
+            metrics.panel_floats = self.panels.floats(id);
         }
         metrics
     }
@@ -507,6 +522,9 @@ impl Shell {
                         unload_on_close: settings.unload_on_close,
                         unload_after_minutes: settings.unload_after_minutes,
                         reload_every_seconds: settings.reload_every_seconds,
+                        floating: settings.floating,
+                        selector: settings.selector,
+                        icon: settings.icon.as_ref().map(super::spaces::icon_view),
                     },
                 })
             })
@@ -519,8 +537,13 @@ impl Shell {
     pub(super) fn restore_open_panel(&mut self) {
         let panels = self.all_panels();
         for id in &panels {
-            if self.panels.settings(*id).mobile {
+            let settings = self.panels.settings(*id);
+            if settings.mobile {
                 self.engine.set_mobile_user_agent(*id, true);
+            }
+            if settings.selector.is_some() {
+                self.engine
+                    .set_item_style(*id, isolation_css(settings.selector.as_deref()));
             }
         }
         let focused = self.panel_scope();

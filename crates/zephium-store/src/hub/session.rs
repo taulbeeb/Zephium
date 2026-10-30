@@ -59,6 +59,12 @@ struct BoundedPanelSettings {
     unload_after_minutes: Option<u32>,
     #[serde(default)]
     reload_every_seconds: Option<u32>,
+    #[serde(default)]
+    floating: bool,
+    #[serde(default)]
+    selector: Option<String>,
+    #[serde(default)]
+    icon: Option<zephium_core::spaces::SpaceIcon>,
 }
 
 fn deserialize_bounded_panel_settings<'de, D>(
@@ -72,6 +78,15 @@ where
             .name
             .as_ref()
             .is_none_or(|name| name.len() <= MAX_NAME_BYTES)
+            && entry.selector.as_ref().is_none_or(|selector| {
+                selector.len() <= zephium_core::panels::MAX_PANEL_SELECTOR_BYTES
+            })
+            && match &entry.icon {
+                Some(zephium_core::spaces::SpaceIcon::Emoji(text)) => {
+                    text.len() <= zephium_core::spaces::MAX_SPACE_EMOJI_BYTES
+                }
+                _ => true,
+            }
     })
 }
 
@@ -437,6 +452,9 @@ impl BoundedSessionState {
                             unload_on_close: entry.unload_on_close,
                             unload_after_minutes: entry.unload_after_minutes,
                             reload_every_seconds: entry.reload_every_seconds,
+                            floating: entry.floating,
+                            selector: entry.selector,
+                            icon: entry.icon,
                         },
                     })
                     .collect(),
@@ -2041,6 +2059,9 @@ mod closed_session_wire_tests {
                     settings: zephium_core::panels::PanelSettings {
                         name: Some("Chat".into()),
                         unload_after_minutes: Some(15),
+                        floating: true,
+                        selector: Some("#chat".into()),
+                        icon: Some(zephium_core::spaces::SpaceIcon::Emoji("💬".into())),
                         ..Default::default()
                     },
                 }],

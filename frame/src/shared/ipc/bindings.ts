@@ -2628,6 +2628,9 @@ export type PanelSettingsInputV1 = {
 	unload_on_close: boolean,
 	unload_after_minutes: number | null,
 	reload_every_seconds: number | null,
+	floating: boolean,
+	selector: string | null,
+	icon: SpaceIconView | null,
 };
 
 export type PanelState = {
@@ -3623,6 +3626,12 @@ export type WebPanelSettingsView = {
 	unload_on_close: boolean,
 	unload_after_minutes: number | null,
 	reload_every_seconds: number | null,
+	/**  Slides over the page instead of narrowing it. */
+	floating: boolean,
+	/**  Shows only what this CSS selector finds. */
+	selector: string | null,
+	/**  Drawn on the strip instead of the site's icon. */
+	icon: SpaceIconView | null,
 };
 
 /**  A site docked beside the page, shared by every space of the profile. */

@@ -167,6 +167,11 @@ impl Shell {
             web_panel,
         }));
         let (tree, region) = match (panel, tree, l.content) {
+            // Floating, the page keeps its region and the panel is drawn over
+            // its trailing edge.
+            (Some((panel, rect)), Some(tree), Some(region)) if metrics.panel_floats => {
+                (Some(split::float(tree, region, panel, rect)), Some(region))
+            }
             (Some((panel, rect)), Some(tree), Some(region)) => {
                 let (tree, union) = split::dock(tree, region, panel, rect, metrics.gap);
                 (Some(tree), Some(union))
@@ -291,7 +296,7 @@ impl Shell {
         };
         let (r, strip) = (target.rect, target.strip);
         let guide = match target.axis {
-            Axis::Row => Rect::new(
+            Axis::Row | Axis::Over => Rect::new(
                 region.x + strip.x + strip.width / 2.0 - 1.0,
                 region.y + r.y,
                 2.0,

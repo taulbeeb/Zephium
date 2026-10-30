@@ -6,3 +6,5 @@ export const loadNavigationError = () => import("./components/NavigationError.sv
 export { sidebarTree } from "./lib/sidebar-model";
 export * as selectionGlide from "./lib/selection-glide";
 export { applySpaceTheme, spaceThemeValues } from "./lib/space-theme";
+export { default as SpaceGlyph } from "./components/SpaceGlyph.svelte";
+export { SPACE_SYMBOLS, emojiOf } from "./lib/space-look";

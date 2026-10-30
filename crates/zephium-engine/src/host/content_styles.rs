@@ -212,6 +212,16 @@ impl EngineHost {
         self.refresh_profile_document_styles(profile);
     }
 
+    pub(crate) fn set_item_style(&mut self, id: ItemId, css: Option<Arc<str>>) {
+        let changed = match css.filter(|css| !css.is_empty() && css.len() <= 4 * 1024) {
+            Some(css) => self.item_styles.insert(id, css.clone()).as_ref() != Some(&css),
+            None => self.item_styles.remove(&id).is_some(),
+        };
+        if changed {
+            self.refresh_document_styles(id);
+        }
+    }
+
     /// The page style for `url`: the stored site its host is, or ends in.
     fn page_style_for(&self, profile: ProfileId, url: &str) -> Arc<str> {
         let styles = self.page_styles.get(&profile);
@@ -329,7 +339,10 @@ impl EngineHost {
             .get(&profile)
             .and_then(|p| p.applied.as_ref())
             .and_then(|p| p.cosmetics.clone());
-        let page_style = self.page_style_for(profile, &url);
+        let page_style = match self.item_styles.get(&id) {
+            Some(own) => Arc::from(format!("{}{own}", self.page_style_for(profile, &url))),
+            None => self.page_style_for(profile, &url),
+        };
         let key = StyleKey {
             epoch,
             url: url.clone(),
