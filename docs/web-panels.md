@@ -206,11 +206,12 @@ Gaps closed after phase 1:
   own safety probe first, as Zephium's tab sleeping does; a page holding
   unsent typing stays awake and is asked again a full idle period later.
 
+- **Header hover on macOS:** the pointer cover parks the interface's hover
+  tracking only where the stage takes the pointer, and the stage tracks
+  its header bands so crossing one re-checks it; header buttons light up.
+
 Not done:
 
-- **Header hover on macOS:** while the pointer is over the page layer the
-  interface's hover tracking is parked, so header buttons may not light up
-  on hover. They still take clicks.
 - **Padding and animation preferences:** the strip follows Zephium's own
   density and Reduce Motion settings.
 

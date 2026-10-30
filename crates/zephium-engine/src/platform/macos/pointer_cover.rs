@@ -179,12 +179,22 @@ fn pointer_inside(view: &NSView) -> bool {
     if !window.isKeyWindow() || view.isHiddenOrHasHiddenAncestor() {
         return false;
     }
-    let point = view.convertPoint_fromView(window.mouseLocationOutsideOfEventStream(), None);
+    let at = window.mouseLocationOutsideOfEventStream();
+    let point = view.convertPoint_fromView(at, None);
     let visible = view.visibleRect();
-    point.x >= visible.origin.x
+    let within = point.x >= visible.origin.x
         && point.x < visible.origin.x + visible.size.width
         && point.y >= visible.origin.y
-        && point.y < visible.origin.y + visible.size.height
+        && point.y < visible.origin.y + visible.size.height;
+    // Over the covering view's footprint, but only where it takes the
+    // pointer: a place it passes through (a panel's header band) belongs to
+    // the canvas beneath, which keeps its hover there.
+    within
+        && window.contentView().is_some_and(|content| {
+            content
+                .hitTest(at)
+                .is_some_and(|hit| std::ptr::eq(&*hit, view) || hit.isDescendantOf(view))
+        })
 }
 
 /// Held by whoever presents `view` over the canvas; dropping it, or the

@@ -271,6 +271,7 @@ define_class!(
         fn mouse_moved(&self, event: &NSEvent) { self.update_hover(event); }
         #[unsafe(method(mouseExited:))]
         fn mouse_exited(&self, _event: &NSEvent) {
+            self.sync_pointer_cover();
             if self.ivars().drag.try_borrow().is_ok_and(|drag| drag.is_none()) { self.cancel_split_drag(false); }
         }
         #[unsafe(method(cancelOperation:))]
@@ -1553,6 +1554,7 @@ impl ContentStage {
     }
 
     fn update_hover(&self, event: &NSEvent) {
+        self.sync_pointer_cover();
         if self
             .ivars()
             .drag
@@ -1793,16 +1795,39 @@ impl ContentStage {
             .ok()
             .and_then(|tree| tree.as_deref().cloned());
         let h = self.bounds().size.height;
+        let gap = self.ivars().gap.get();
+        // A pane's header band passes the pointer to the interface beneath;
+        // crossing it re-checks the pointer cover, so the interface's hover
+        // works there.
+        let insets = self
+            .ivars()
+            .top_insets
+            .try_borrow()
+            .map(|insets| insets.clone())
+            .unwrap_or_default();
+        let bands: Vec<Rect> = tree
+            .as_ref()
+            .map(|tree| split::layout(tree, self.region(), gap))
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|(id, r)| {
+                insets
+                    .get(&id)
+                    .map(|top| Rect::new(r.x, r.y, r.width, top.min(r.height)))
+            })
+            .collect();
         let desired: Vec<_> = tree
-            .map(|tree| split::dividers(&tree, self.region(), self.ivars().gap.get()))
+            .map(|tree| split::dividers(&tree, self.region(), gap))
             .unwrap_or_default()
             .into_iter()
             .take(7)
-            .filter(|d| d.strip.width > 0.0 && d.strip.height > 0.0)
-            .map(|d| {
+            .map(|d| d.strip)
+            .chain(bands)
+            .filter(|strip| strip.width > 0.0 && strip.height > 0.0)
+            .map(|strip| {
                 NSRect::new(
-                    NSPoint::new(d.strip.x, h - d.strip.y - d.strip.height),
-                    NSSize::new(d.strip.width, d.strip.height),
+                    NSPoint::new(strip.x, h - strip.y - strip.height),
+                    NSSize::new(strip.width, strip.height),
                 )
             })
             .collect();
