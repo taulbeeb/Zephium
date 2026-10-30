@@ -331,10 +331,11 @@ pub(super) fn filter_windows_context_menu(
     navigation.matches_activity(activity)
         && windows_context_foreground(permit, presented, controller)
 }
-/// Adds "Open Link in Web Panel" after "Open link in new window" when the
-/// menu is for a web link. Runs on an admitted menu only.
+/// Adds "Open Link in Web Panel" after "Open link in new window" for a web
+/// link, and "Search in Web Panel" for selected text, which WebView2 reads.
+/// Runs on an admitted menu only.
 #[cfg(target_os = "windows")]
-pub(super) fn add_windows_panel_item(
+pub(super) fn add_windows_panel_items(
     permit: &EventPermit,
     sink: &super::permits::Sink,
     source: ItemId,
@@ -342,22 +343,37 @@ pub(super) fn add_windows_panel_item(
     args: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2ContextMenuRequestedEventArgs,
 ) {
     use webview2_com::Microsoft::Web::WebView2::Win32::{
-        ICoreWebView2Environment9, ICoreWebView2_2, COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_COMMAND,
+        ICoreWebView2ContextMenuItem, ICoreWebView2Environment9, ICoreWebView2_2,
+        COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_COMMAND,
     };
     use windows::core::{Interface, HSTRING, PWSTR};
     let Ok(target) = (unsafe { args.ContextMenuTarget() }) else {
         return;
     };
     let mut link = windows::core::BOOL::default();
-    if unsafe { target.HasLinkUri(&mut link) }.is_err() || !link.as_bool() {
-        return;
-    }
-    let mut raw = PWSTR::null();
-    if unsafe { target.LinkUri(&mut raw) }.is_err() {
-        return;
-    }
-    let url = webview2_com::take_pwstr(raw);
-    if url.len() > 8 * 1024 || !(url.starts_with("https://") || url.starts_with("http://")) {
+    let url = (unsafe { target.HasLinkUri(&mut link) }.is_ok() && link.as_bool())
+        .then(|| {
+            let mut raw = PWSTR::null();
+            unsafe { target.LinkUri(&mut raw) }
+                .ok()
+                .map(|_| webview2_com::take_pwstr(raw))
+        })
+        .flatten()
+        .filter(|url| {
+            url.len() <= 8 * 1024 && (url.starts_with("https://") || url.starts_with("http://"))
+        });
+    let mut selected = windows::core::BOOL::default();
+    let text = (unsafe { target.HasSelection(&mut selected) }.is_ok() && selected.as_bool())
+        .then(|| {
+            let mut raw = PWSTR::null();
+            unsafe { target.SelectionText(&mut raw) }
+                .ok()
+                .map(|_| webview2_com::take_pwstr(raw))
+        })
+        .flatten()
+        .map(|text| text.trim().chars().take(1000).collect::<String>())
+        .filter(|text| !text.is_empty());
+    if url.is_none() && text.is_none() {
         return;
     }
     let Ok(environment) = (unsafe {
@@ -369,47 +385,59 @@ pub(super) fn add_windows_panel_item(
     }) else {
         return;
     };
-    let label = HSTRING::from("Open Link in Web Panel");
-    let Ok(item) = (unsafe {
-        environment.CreateContextMenuItem(
-            &label,
-            None::<&windows::Win32::System::Com::IStream>,
-            COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_COMMAND,
-        )
-    }) else {
-        return;
+    let make = |label: &str, event: EngineEvent| -> Option<ICoreWebView2ContextMenuItem> {
+        let item = unsafe {
+            environment.CreateContextMenuItem(
+                &HSTRING::from(label),
+                None::<&windows::Win32::System::Com::IStream>,
+                COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_COMMAND,
+            )
+        }
+        .ok()?;
+        let (permit, sink) = (permit.clone(), sink.clone());
+        let chosen = webview2_com::CustomItemSelectedEventHandler::create(Box::new(move |_, _| {
+            permit.emit(&sink, event.clone());
+            Ok(())
+        }));
+        let mut token = 0;
+        unsafe { item.add_CustomItemSelected(&chosen, &mut token) }.ok()?;
+        Some(item)
     };
-    let (permit, sink) = (permit.clone(), sink.clone());
-    let chosen = webview2_com::CustomItemSelectedEventHandler::create(Box::new(move |_, _| {
-        permit.emit(
-            &sink,
-            EngineEvent::OpenInPanelRequested {
-                id: source,
-                url: url.clone(),
-            },
-        );
-        Ok(())
-    }));
-    let mut token = 0;
-    if unsafe { item.add_CustomItemSelected(&chosen, &mut token) }.is_err() {
-        return;
-    }
     let Ok(items) = (unsafe { args.MenuItems() }) else {
         return;
     };
-    let mut count = 0;
-    if unsafe { items.Count(&mut count) }.is_err() {
-        return;
+    let position = |name: &str| {
+        let mut count = 0;
+        if unsafe { items.Count(&mut count) }.is_err() {
+            return None;
+        }
+        (0..count).find(|index| {
+            let Ok(entry) = (unsafe { items.GetValueAtIndex(*index) }) else {
+                return false;
+            };
+            let mut found = PWSTR::null();
+            unsafe { entry.Name(&mut found) }.is_ok() && webview2_com::take_pwstr(found) == name
+        })
+    };
+    let labels = crate::page_menu::labels();
+    if let Some(url) = url {
+        if let Some(item) = make(
+            &labels.open_link_in_panel,
+            EngineEvent::OpenInPanelRequested { id: source, url },
+        ) {
+            let at = position("openLinkInNewWindow").map_or(0, |index| index + 1);
+            let _ = unsafe { items.InsertValueAtIndex(at, &item) };
+        }
     }
-    let after = (0..count).find(|index| {
-        let Ok(entry) = (unsafe { items.GetValueAtIndex(*index) }) else {
-            return false;
-        };
-        let mut name = PWSTR::null();
-        unsafe { entry.Name(&mut name) }.is_ok()
-            && webview2_com::take_pwstr(name) == "openLinkInNewWindow"
-    });
-    let _ = unsafe { items.InsertValueAtIndex(after.map_or(0, |index| index + 1), &item) };
+    if let Some(text) = text {
+        if let Some(item) = make(
+            &labels.search_in_panel,
+            EngineEvent::SearchInPanelRequested { id: source, text },
+        ) {
+            let at = position("copy").map_or(0, |index| index + 1);
+            let _ = unsafe { items.InsertValueAtIndex(at, &item) };
+        }
+    }
 }
 
 #[cfg(any(target_os = "windows", test))]

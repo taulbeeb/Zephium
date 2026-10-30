@@ -1963,8 +1963,9 @@ pub(crate) struct PlatformSpecificWebViewAttributes {
     >,
   >,
   #[cfg(target_os = "macos")]
-  menu_will_open_handler:
-    Option<Box<dyn Fn(&objc2_app_kit::NSMenu, &objc2_app_kit::NSEvent)>>,
+  menu_will_open_handler: Option<
+    Box<dyn Fn(&objc2_app_kit::NSMenu, &objc2_app_kit::NSEvent, &objc2_web_kit::WKWebView)>,
+  >,
 }
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -2127,10 +2128,12 @@ pub trait WebViewBuilderExtMacos {
       + 'static,
   ) -> Self;
   /// Called with the menu WebKit is about to show for the page, after its
-  /// own items are in it, so browser items can be added.
+  /// own items are in it, so browser items can be added; the page's view
+  /// comes with it.
   fn with_menu_will_open_handler(
     self,
-    handler: impl Fn(&objc2_app_kit::NSMenu, &objc2_app_kit::NSEvent) + 'static,
+    handler: impl Fn(&objc2_app_kit::NSMenu, &objc2_app_kit::NSEvent, &objc2_web_kit::WKWebView)
+      + 'static,
   ) -> Self;
 }
 
@@ -2219,7 +2222,8 @@ impl WebViewBuilderExtMacos for WebViewBuilder<'_> {
 
   fn with_menu_will_open_handler(
     mut self,
-    handler: impl Fn(&objc2_app_kit::NSMenu, &objc2_app_kit::NSEvent) + 'static,
+    handler: impl Fn(&objc2_app_kit::NSMenu, &objc2_app_kit::NSEvent, &objc2_web_kit::WKWebView)
+      + 'static,
   ) -> Self {
     self.platform_specific.menu_will_open_handler = Some(Box::new(handler));
     self

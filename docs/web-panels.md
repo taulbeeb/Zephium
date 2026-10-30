@@ -194,16 +194,23 @@ Gaps closed after phase 1:
   with its own switch. Chrome never sets it: settings from the sheet keep
   the shell's.
 
+- **Search in Web Panel** in the page's menu for selected text. On macOS
+  the item reads the selection in WebKit's client script world, which the
+  page cannot reach; on Windows WebView2 reports it. The text is searched
+  with the configured engine, never visited as an address.
+- **Page-menu titles** follow the interface language: the desktop hands
+  the engine translated labels at launch and on a language change.
+- **Safe unloading:** unload-on-close and the unload timer ask the page's
+  own safety probe first, as Zephium's tab sleeping does; a page holding
+  unsent typing stays awake and is asked again a full idle period later.
+
 Not done:
 
 - **Header hover on macOS:** while the pointer is over the page layer the
   interface's hover tracking is parked, so header buttons may not light up
   on hover. They still take clicks.
-- **Search in Web Panel:** WebKit gives the browser no hook for the
-  selected text in its menu. Type the search in the panel's address field.
 - **Padding and animation preferences:** the strip follows Zephium's own
   density and Reduce Motion settings.
-- The menu item's title is English only.
 
 ## Decisions
 

@@ -81,6 +81,9 @@ pub(super) struct ResidencyState {
     pub(super) live_view_pressure_limit: usize,
     pub(super) next_discard_probe: u64,
     pub(super) discard_probes: std::collections::HashMap<ItemId, PendingDiscardProbe>,
+    /// Pages asked to sleep by name (a closed panel's unload setting), not
+    /// by the memory policy; the page's own safety probe still decides.
+    pub(super) asked_to_sleep: std::collections::HashSet<ItemId>,
     pub(super) discard_protected_until: std::collections::HashMap<ItemId, std::time::Instant>,
 }
 
@@ -111,6 +114,7 @@ impl Default for ResidencyState {
             live_view_pressure_limit: LIVE_VIEW_PRESSURE_LIMIT,
             next_discard_probe: 0,
             discard_probes: std::collections::HashMap::new(),
+            asked_to_sleep: std::collections::HashSet::new(),
             discard_protected_until: std::collections::HashMap::new(),
         }
     }
@@ -496,11 +500,13 @@ impl Shell {
             .iter()
             .filter_map(|(id, state)| match state {
                 PendingDiscardProbe::Probing { committed_url, .. } => {
-                    let valid = self.wants_discard(*id, live_count, &warm)
+                    // A page asked to sleep by a setting keeps its probe.
+                    let asked = self.residency.asked_to_sleep.contains(id);
+                    let valid = (asked || self.wants_discard(*id, live_count, &warm))
                         && !protected.contains(id)
                         && self.items.tab(*id).is_some_and(|tab| {
                             tab.has_view()
-                                && !tab.loading
+                                && (!tab.loading || asked)
                                 && tab
                                     .url
                                     .as_ref()
@@ -609,47 +615,71 @@ impl Shell {
         let available =
             MAX_CONCURRENT_DISCARD_PROBES.saturating_sub(self.residency.discard_probes.len());
         for id in candidates.into_iter().take(available) {
-            let Some(next) = self.residency.next_discard_probe.checked_add(1) else {
-                // Reusing a process-local correlation id could accept a very
-                // late callback. Saturation permanently disables new probes.
+            if self.start_discard_probe(id).is_none() {
                 break;
-            };
-            self.residency.next_discard_probe = next;
-            let probe = DiscardProbeId(next);
-            let deadline = std::time::Instant::now() + self.residency.discard_probe_timeout;
-            let Some(committed_url) = self
-                .items
-                .tab(id)
-                .and_then(|tab| tab.url.as_ref())
-                .map(ToString::to_string)
-            else {
-                continue;
-            };
-            self.residency.discard_probes.insert(
-                id,
-                PendingDiscardProbe::Probing {
-                    probe,
-                    committed_url,
-                    deadline,
-                },
-            );
-            // A suspended WebView2 cannot reliably execute the DOM query.
-            // Replace the desired dormant set first; main-thread FIFO then
-            // guarantees resume is requested before the probe evaluation.
-            if self.residency.dormant_sent.contains(&id) {
-                self.residency.dormant_sent.retain(|dormant| *dormant != id);
-                self.engine.set_dormant(self.residency.dormant_sent.clone());
-            }
-            if !self.engine.probe_discard_safety(id, probe) {
-                self.residency.discard_probes.remove(&id);
-                self.protect_discard_candidate(id);
-                continue;
-            }
-            if let Some(queue) = &self.self_queue {
-                queue.schedule_discard_probe(id, probe, deadline);
             }
         }
         false
+    }
+
+    /// Asks the page whether it can sleep without losing anything, then
+    /// sleeps it if so. `None` once probe ids are spent; `Some(false)` when
+    /// this page was not probed.
+    fn start_discard_probe(&mut self, id: ItemId) -> Option<bool> {
+        let Some(next) = self.residency.next_discard_probe.checked_add(1) else {
+            // Reusing a process-local correlation id could accept a very
+            // late callback. Saturation permanently disables new probes.
+            return None;
+        };
+        self.residency.next_discard_probe = next;
+        let probe = DiscardProbeId(next);
+        let deadline = std::time::Instant::now() + self.residency.discard_probe_timeout;
+        let Some(committed_url) = self
+            .items
+            .tab(id)
+            .and_then(|tab| tab.url.as_ref())
+            .map(ToString::to_string)
+        else {
+            return Some(false);
+        };
+        self.residency.discard_probes.insert(
+            id,
+            PendingDiscardProbe::Probing {
+                probe,
+                committed_url,
+                deadline,
+            },
+        );
+        // A suspended WebView2 cannot reliably execute the DOM query.
+        // Replace the desired dormant set first; main-thread FIFO then
+        // guarantees resume is requested before the probe evaluation.
+        if self.residency.dormant_sent.contains(&id) {
+            self.residency.dormant_sent.retain(|dormant| *dormant != id);
+            self.engine.set_dormant(self.residency.dormant_sent.clone());
+        }
+        if !self.engine.probe_discard_safety(id, probe) {
+            self.residency.discard_probes.remove(&id);
+            self.protect_discard_candidate(id);
+            return Some(false);
+        }
+        if let Some(queue) = &self.self_queue {
+            queue.schedule_discard_probe(id, probe, deadline);
+        }
+        Some(true)
+    }
+
+    /// Puts a page to sleep because a setting asked for it, once its own
+    /// probe says nothing typed or unsent would be lost; otherwise it stays.
+    pub(super) fn ask_to_sleep(&mut self, id: ItemId) {
+        if self.residency.discard_probes.contains_key(&id)
+            || !self.items.tab(id).is_some_and(TabState::has_view)
+        {
+            return;
+        }
+        self.residency.asked_to_sleep.insert(id);
+        if self.start_discard_probe(id) != Some(true) {
+            self.residency.asked_to_sleep.remove(&id);
+        }
     }
 
     pub(super) fn discard_protected_leaves(&self) -> std::collections::HashSet<ItemId> {
@@ -683,16 +713,17 @@ impl Shell {
     fn candidate_is_still_discardable(&self, id: ItemId, committed_url: &str) -> bool {
         let live_count = self.items.view_ids().len();
         let protected = self.discard_protected_leaves();
+        let asked = self.residency.asked_to_sleep.contains(&id);
         !protected.contains(&id)
             && self.items.tab(id).is_some_and(|tab| {
                 tab.has_view()
-                    && !tab.loading
+                    && (!tab.loading || asked)
                     && tab
                         .url
                         .as_ref()
                         .is_some_and(|url| url.as_str() == committed_url)
             })
-            && self.wants_discard(id, live_count, &self.warm_views(&protected))
+            && (asked || self.wants_discard(id, live_count, &self.warm_views(&protected)))
     }
 
     /// Memory is needed now, so idle grace and the warm set no longer apply.
@@ -778,6 +809,7 @@ impl Shell {
     }
 
     pub(super) fn cancel_discard_probe(&mut self, id: ItemId) {
+        self.residency.asked_to_sleep.remove(&id);
         match self.residency.discard_probes.get_mut(&id) {
             Some(PendingDiscardProbe::Closing {
                 probe, recreate, ..
@@ -817,6 +849,7 @@ impl Shell {
         );
         if exact {
             self.residency.discard_probes.remove(&id);
+            self.residency.asked_to_sleep.remove(&id);
             self.protect_discard_candidate(id);
             self.maintain_views();
         }
@@ -842,10 +875,12 @@ impl Shell {
         if let Some(queue) = &self.self_queue {
             queue.cancel_discard_probe(id);
         }
-        if !can_discard
-            || deadline <= std::time::Instant::now()
-            || !self.candidate_is_still_discardable(id, &committed_url)
-        {
+        let discardable = can_discard
+            && deadline > std::time::Instant::now()
+            && self.candidate_is_still_discardable(id, &committed_url);
+        // An explicit request is answered by this one probe either way.
+        self.residency.asked_to_sleep.remove(&id);
+        if !discardable {
             self.residency.discard_probes.remove(&id);
             if !can_discard || deadline <= std::time::Instant::now() {
                 self.protect_discard_candidate(id);

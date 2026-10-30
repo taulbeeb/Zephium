@@ -1707,6 +1707,12 @@ pub enum EngineEvent {
         id: ItemId,
         url: String,
     },
+    /// The person chose "Search in Web Panel" for the text selected in the
+    /// page; the browser read it, never the page's own script.
+    SearchInPanelRequested {
+        id: ItemId,
+        text: String,
+    },
     PermissionRequested {
         id: ItemId,
         profile: ProfileId,

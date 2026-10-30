@@ -37,6 +37,9 @@ fn isolation_css(selector: Option<&str>) -> Option<std::sync::Arc<str>> {
         .map(std::sync::Arc::from)
 }
 
+/// Longer selections are not searched; a search engine would cut them anyway.
+const MAX_PANEL_SEARCH_CHARS: usize = 500;
+
 fn rejected(reason: OperationReason) -> OperationDisposition {
     operation_result(OperationOutcome::Rejected, reason)
 }
@@ -339,10 +342,10 @@ impl Shell {
         let mut effects = Vec::new();
         if let Some(previous) = previous.filter(|previous| Some(*previous) != id) {
             self.panel_timers.closed_at.insert(previous, now);
-            // A panel set to unload on close sleeps as soon as it goes.
+            // A panel set to unload on close sleeps as soon as it goes,
+            // unless its page holds something a reload would lose.
             if self.panels.settings(previous).unload_on_close {
-                self.cancel_discard_probe(previous);
-                effects.extend(self.items.hibernate(previous));
+                self.ask_to_sleep(previous);
             }
         }
         if let Some(id) = id {
@@ -406,6 +409,23 @@ impl Shell {
         mutation_result(native)
     }
 
+    /// Text selected in a page, searched in a new panel in the page's own
+    /// container with the configured engine.
+    pub(super) fn search_in_panel(&mut self, source: ItemId, text: &str) {
+        let text: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        if text.is_empty() || text.chars().count() > MAX_PANEL_SEARCH_CHARS {
+            return;
+        }
+        let Some(url) = self
+            .search
+            .engine
+            .configured_search(&text, &self.search.custom_url)
+        else {
+            return;
+        };
+        self.open_link_in_panel(source, url.as_str());
+    }
+
     /// A link a page's menu asked to open as a panel: a new panel in the
     /// page's own container, shown beside it.
     pub(super) fn open_link_in_panel(&mut self, source: ItemId, url: &str) {
@@ -425,7 +445,6 @@ impl Shell {
     pub(super) fn panel_wake(&mut self) {
         let now = std::time::Instant::now();
         let shown = self.shown_panel();
-        let mut effects = Vec::new();
         let mut reloads = Vec::new();
         for id in self.all_panels() {
             let settings = self.panels.settings(id);
@@ -440,9 +459,10 @@ impl Shell {
                 // A page making sound keeps playing in a closed panel.
                 let audible = self.items.tab(id).is_some_and(|tab| tab.audio.shown());
                 if shown != Some(id) && !audible && now >= closed + idle {
-                    self.panel_timers.closed_at.remove(&id);
-                    self.cancel_discard_probe(id);
-                    effects.extend(self.items.hibernate(id));
+                    // The page's own probe decides; a page holding unsent
+                    // typing stays, and is asked again a full idle later.
+                    self.panel_timers.closed_at.insert(id, now);
+                    self.ask_to_sleep(id);
                     continue;
                 }
             }
@@ -455,7 +475,7 @@ impl Shell {
                 }
             }
         }
-        let _ = self.commit(effects);
+
         for id in reloads {
             let _ = self.engine.reload(id);
         }

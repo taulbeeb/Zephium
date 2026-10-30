@@ -392,7 +392,38 @@ fn a_panel_set_to_unload_on_close_sleeps_when_it_closes() {
     );
     assert!(shell.items.tab(panel).unwrap().has_view());
     assert!(done(panel_op(&mut shell, PanelCommand::Open(None))));
+    // The page is asked first; it sleeps once it says nothing would be lost.
+    assert!(shell.items.tab(panel).unwrap().has_view());
+    let (asked, probe) = first_probing_discard(&shell);
+    assert_eq!(asked, panel);
+    acknowledge_safe_discard(&mut shell, panel, probe);
     assert!(!shell.items.tab(panel).unwrap().has_view());
+}
+
+#[test]
+fn a_closed_panel_holding_unsent_typing_stays_awake() {
+    let (mut shell, _engine, _screen, _store) = browsed();
+    let panel = add(&mut shell, "chat.example");
+    panel_op(
+        &mut shell,
+        PanelCommand::Configure {
+            id: panel,
+            settings: zephium_core::panels::PanelSettings {
+                unload_on_close: true,
+                ..Default::default()
+            },
+        },
+    );
+    assert!(done(panel_op(&mut shell, PanelCommand::Open(None))));
+    let (_, probe) = first_probing_discard(&shell);
+    shell.handle(Command::Engine(EngineEvent::DiscardSafety {
+        id: panel,
+        probe,
+        can_discard: false,
+    }));
+    assert!(shell.items.tab(panel).unwrap().has_view());
+    assert!(shell.residency.discard_probes.is_empty());
+    assert!(shell.residency.asked_to_sleep.is_empty());
 }
 
 #[test]
@@ -423,6 +454,9 @@ fn timers_put_an_idle_closed_panel_to_sleep_and_reload_an_awake_one() {
     let long_ago = std::time::Instant::now() - std::time::Duration::from_secs(10 * 60);
     shell.panel_timers.age_for_test(idle, busy, long_ago);
     shell.handle(Command::PanelWake);
+    let (asked, probe) = first_probing_discard(&shell);
+    assert_eq!(asked, idle);
+    acknowledge_safe_discard(&mut shell, idle, probe);
     assert!(!shell.items.tab(idle).unwrap().has_view());
     assert!(shell.items.tab(busy).unwrap().has_view());
     assert!(engine.calls().contains(&format!("reload {busy}")));
@@ -706,4 +740,51 @@ fn home_returns_a_panel_to_its_address_and_follows_the_sheet() {
         shell.panels.settings(panel).home.as_deref(),
         Some(mail.as_str())
     );
+}
+
+#[test]
+fn selected_text_from_the_page_menu_is_searched_in_a_new_panel() {
+    let (mut shell, _engine, screen, _store) = browsed();
+    let tab = active_id(&screen);
+    navigate_and_commit(&mut shell, tab, "news.example");
+    let profile = profile(&shell);
+    shell.handle(Command::Engine(EngineEvent::SearchInPanelRequested {
+        id: tab,
+        text: "  rust   borrow checker \n".into(),
+    }));
+    let panels = shell.profile_panels(profile);
+    assert_eq!(panels.len(), 1);
+    let url = shell
+        .items
+        .tab(panels[0])
+        .unwrap()
+        .url
+        .as_ref()
+        .unwrap()
+        .to_string();
+    assert!(url.contains("rust"), "{url}");
+    assert!(url.contains("borrow"), "{url}");
+    // A domain-like selection is still a search, never a visit.
+    shell.handle(Command::Engine(EngineEvent::SearchInPanelRequested {
+        id: tab,
+        text: "evil.example".into(),
+    }));
+    let second = *shell.profile_panels(profile).last().unwrap();
+    let url = shell
+        .items
+        .tab(second)
+        .unwrap()
+        .url
+        .as_ref()
+        .unwrap()
+        .to_string();
+    assert!(!url.starts_with("https://evil.example"), "{url}");
+    // Empty or overlong selections add nothing.
+    for text in ["   ", &"x".repeat(501)] {
+        shell.handle(Command::Engine(EngineEvent::SearchInPanelRequested {
+            id: tab,
+            text: text.to_string(),
+        }));
+    }
+    assert_eq!(shell.profile_panels(profile).len(), 2);
 }

@@ -1317,9 +1317,23 @@ impl EngineHost {
             {
                 use wry::WebViewBuilderExtMacos;
                 let intent = panel_intent.clone();
-                let kept = std::cell::RefCell::new(None);
-                builder = builder.with_menu_will_open_handler(move |menu, _event| {
-                    crate::platform::imp::panel_menu::add_open_in_panel(menu, &intent, &kept);
+                let kept = crate::platform::imp::panel_menu::KeptTargets::default();
+                let search_item = id.clone();
+                let search_permit = event_permit.clone();
+                let search_sink = self.sink.clone();
+                let search: crate::platform::imp::panel_menu::SearchSink = Rc::new(move |text| {
+                    search_permit.emit(
+                        &search_sink,
+                        EngineEvent::SearchInPanelRequested {
+                            id: search_item.get(),
+                            text,
+                        },
+                    )
+                });
+                builder = builder.with_menu_will_open_handler(move |menu, _event, view| {
+                    crate::platform::imp::panel_menu::add_panel_items(
+                        menu, view, &intent, &search, &kept,
+                    );
                 });
             }
             #[cfg(target_os = "macos")]
@@ -1491,7 +1505,7 @@ impl EngineHost {
                     );
                     menu_save.menu(&menu_navigation, args, admitted);
                     if admitted {
-                        super::page_open::add_windows_panel_item(
+                        super::page_open::add_windows_panel_items(
                             &menu_permit,
                             &menu_sink,
                             menu_item.get(),

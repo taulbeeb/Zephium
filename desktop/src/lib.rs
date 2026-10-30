@@ -6606,6 +6606,7 @@ pub fn run() {
                 #[cfg(target_os = "windows")]
                 windows_privacy::initialize(app.handle(), store.clone());
                 menu_text::set_language(store.app_setting("ui.language").as_deref());
+                panels::publish_page_menu_labels();
                 updates::schedule_native_checks(app.handle());
                 work_models::install(app.handle());
                 account::install(app.handle());
@@ -7050,6 +7051,9 @@ pub fn run() {
                         }
                         if let Some(keymap) = emit_handle.try_state::<keymap::Keymap>() {
                             let language = key == "ui.language" && menu_text::set_language(Some(value));
+                            if language {
+                                panels::publish_page_menu_labels();
+                            }
                             if keymap.follow_preference(key, value) || language {
                                 keymap.rebuild_menu_bar(&emit_handle);
                             }

@@ -3869,6 +3869,8 @@
   "containers_delete_confirm": "Delete Container",
   "tab_in_container": "{title}, in {container}",
   "native_new_container_tab": "New Container Tab",
+  "native_open_link_in_web_panel": "Open Link in Web Panel",
+  "native_search_in_web_panel": "Search in Web Panel",
   "native_open_in_container": "Open in Container",
   "native_no_container": "No Container",
   "space_container": "New tabs open in",

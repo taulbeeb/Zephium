@@ -335,6 +335,14 @@ pub(crate) fn panels_sheet(
     dispatch(caller.app_handle(), &shell, PanelCommand::Sheet(open))
 }
 
+/// The browser's items in a page's own menu, in the interface language.
+pub(crate) fn publish_page_menu_labels() {
+    zephium_engine::page_menu::set_page_menu_labels(zephium_engine::page_menu::PageMenuLabels {
+        open_link_in_panel: super::menu_text::label("Open Link in Web Panel"),
+        search_in_panel: super::menu_text::label("Search in Web Panel"),
+    });
+}
+
 /// The tab menu's "Move Tab to Panels": the page moves, the tab closes.
 pub(crate) fn move_tab(app: &AppHandle, tab: ItemId) -> OperationAdmission {
     match app.try_state::<Handle>() {

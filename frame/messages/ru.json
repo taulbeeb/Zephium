@@ -3842,5 +3842,7 @@
   "privacy_windows_diagnostics_failed": "Could not open Windows Settings. Open Windows Settings and search for Diagnostics & feedback.",
   "privacy_microsoft_statement": "Microsoft privacy statement",
   "privacy_microsoft_statement_help": "Read how Microsoft handles SmartScreen and WebView2 data.",
-  "privacy_microsoft_statement_open": "Read privacy statement"
+  "privacy_microsoft_statement_open": "Read privacy statement",
+  "native_open_link_in_web_panel": "Открыть ссылку в веб-панели",
+  "native_search_in_web_panel": "Искать в веб-панели"
 }

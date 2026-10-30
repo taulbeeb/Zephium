@@ -1,5 +1,6 @@
 #[cfg(feature = "agentic-browser")]
 mod agent_context_port;
+pub mod page_menu;
 #[cfg(feature = "agentic-browser")]
 pub use agent_context_port::{
     last_action_timeout_stage, AgentBrowserLifetimeFactory, MAX_AGENT_BROWSER_LIFETIMES,
@@ -1184,6 +1185,7 @@ impl RetirementGate {
             | event @ EngineEvent::LinkedDownloadStarted { id }
             | event @ EngineEvent::NewWindowRequested { id, .. }
             | event @ EngineEvent::OpenInPanelRequested { id, .. }
+            | event @ EngineEvent::SearchInPanelRequested { id, .. }
             | event @ EngineEvent::DownloadRequested { id, .. }
             | event @ EngineEvent::Captured { id, .. }
             | event @ EngineEvent::HtmlExtracted { id, .. }
