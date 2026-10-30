@@ -255,3 +255,21 @@ fn panels_and_the_open_one_survive_a_restart() {
         .any(|call| call.starts_with(&format!("create {panel} "))));
     assert_eq!(last(&screen).web_panels.len(), 1);
 }
+
+#[test]
+fn a_hidden_sidebar_puts_the_panels_away_until_it_comes_back() {
+    let (mut shell, engine, screen, _store) = browsed();
+    let tab = active_id(&screen);
+    navigate_and_commit(&mut shell, tab, "news.example");
+    let panel = add(&mut shell, "chat.example");
+    shell.windows.focused_mut().unwrap().metrics.sidebar_hidden = true;
+    assert_eq!(shell.shown_panel(), None);
+    let _ = shell.relayout();
+    assert!(layouts(&engine).pop().unwrap().ends_with(&tab.to_string()));
+    shell.windows.focused_mut().unwrap().metrics.sidebar_hidden = false;
+    let _ = shell.relayout();
+    assert!(layouts(&engine)
+        .pop()
+        .unwrap()
+        .ends_with(&panel.to_string()));
+}

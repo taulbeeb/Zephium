@@ -257,7 +257,10 @@ impl Shell {
     /// The panel shown beside the page in the focused window right now.
     pub(super) fn shown_panel(&self) -> Option<ItemId> {
         let window = self.windows.focused()?;
-        if self.active_browser_page().is_some() || self.window_filling_fullscreen().is_some() {
+        if self.active_browser_page().is_some()
+            || self.window_filling_fullscreen().is_some()
+            || window.metrics.sidebar_hidden
+        {
             return None;
         }
         self.panels
@@ -269,6 +272,12 @@ impl Shell {
     /// layout of the window must use alike.
     pub(super) fn layout_metrics(&self, window: &zephium_core::windows::Window) -> layout::Metrics {
         let mut metrics = window.metrics;
+        // A hidden sidebar comes over the page as the chrome itself; chrome
+        // spanning the window for the strip would then cover the whole page.
+        // Panels wait until the sidebar is shown again.
+        if metrics.sidebar_hidden {
+            return metrics;
+        }
         let strip = self.active_browser_page().is_none()
             && self.panel_scope() == Some(window.profile)
             && !self.profile_panels(window.profile).is_empty();

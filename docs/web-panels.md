@@ -1,7 +1,7 @@
 # Web panels
 
-Status: plan, on the `feat/web-panels` branch of this fork, built on
-[containers](containers.md). Not an upstream feature.
+Status: phase 1 built on the `feat/web-panels` branch of this fork, on top
+of [containers](containers.md). Not an upstream feature.
 
 A web panel is a site kept docked beside the page, such as chat, music or
 mail. It stays open while you switch tabs and spaces, and it has its own icon
@@ -92,6 +92,33 @@ Multi-Account Containers.
    reorder. A panel sheet for URL, title, container and width. A small panel
    toolbar for back, forward, reload, zoom and close.
 5. **Tests**, then CI on macOS and Windows, then trying it on your Mac.
+
+## Phase 1 as built
+
+- **Add a panel** from the strip's +, from Add Web Panel… on the sidebar
+  menu or View menu, or from a tab's menu with Add Page to Panels (the tab
+  keeps its container in the panel).
+- **The strip** at the trailing edge: click an icon to show or close that
+  panel, drag icons to reorder, right-click to edit or remove one. Back,
+  forward, reload and close for the open panel sit at the strip's foot.
+- **Resize** by dragging the gap between page and panel, or with the arrow
+  keys on it. Widths are 280 to 960 points, kept per panel.
+- **Toggle Web Panel** is Cmd/Ctrl+Shift+L (Zen Sidebar's Ctrl+Shift+E is
+  Zephium's Notes), and can be rebound in Keyboard settings.
+- Links a panel opens arrive as tabs of the current space, in the panel's
+  container. Panels and the open one come back after a restart.
+
+Known gaps in phase 1:
+
+- **Hidden sidebar:** while the sidebar auto-hides, panels are put away.
+  Revealing the sidebar raises the chrome over the page, and chrome that
+  spans the window for the strip would cover all of it. This needs its own
+  native work.
+- **No custom name or icon** yet; a panel shows its page's title and icon.
+- **Zoom** in a panel uses the page's own zoom keys only while the panel
+  has focus; there are no panel zoom controls yet.
+- **Page requests** from a panel (a blocked popup, a permission) have no
+  prompt of their own; they are refused.
 
 ## Decisions
 
