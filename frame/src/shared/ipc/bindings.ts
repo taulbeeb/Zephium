@@ -461,6 +461,11 @@ export const commands = {
 	panelsZoom: (panel: string, step: PanelZoomV1) => __TAURI_INVOKE<OperationAdmission>("panels_zoom", { panel, step }),
 	/**  Brings a strip waiting at the window's edge out, or puts it back. */
 	panelsPeekStrip: (peek: boolean) => __TAURI_INVOKE<OperationAdmission>("panels_peek_strip", { peek }),
+	/**
+	 *  The panel sheet opened or closed; pages step aside while it is open,
+	 *  since the interface draws it beneath them.
+	 */
+	panelsSheet: (open: boolean) => __TAURI_INVOKE<OperationAdmission>("panels_sheet", { open }),
 	operationStatus: (operationId: string) => __TAURI_INVOKE<OperationStatus>("operation_status", { operationId }),
 	operationsReconcile: () => __TAURI_INVOKE<OperationDisposition[]>("operations_reconcile"),
 	operationAcknowledge: (operationId: string) => __TAURI_INVOKE<boolean>("operation_acknowledge", { operationId }),

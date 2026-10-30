@@ -1814,6 +1814,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             panels::panels_configure,
             panels::panels_zoom,
             panels::panels_peek_strip,
+            panels::panels_sheet,
             operation_status,
             operations_reconcile,
             operation_acknowledge,

@@ -232,6 +232,8 @@ pub struct Shell {
     panel_strip_auto: bool,
     /// The waiting strip is out while the pointer is over it.
     panel_strip_peek: bool,
+    /// The panel sheet is open over the window's middle.
+    panel_sheet: bool,
     spaces: Spaces,
     items: Items,
     recently_closed: Vec<zephium_core::session::PersistedClosedTab>,
@@ -482,6 +484,7 @@ impl Shell {
             panel_timers: Default::default(),
             panel_strip_auto: store.app_setting("panels.strip").as_deref() == Some("auto"),
             panel_strip_peek: false,
+            panel_sheet: false,
             spaces: Spaces::default(),
             items: Items::default(),
             recently_closed: Vec::new(),

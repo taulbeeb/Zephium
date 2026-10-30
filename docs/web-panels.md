@@ -162,6 +162,14 @@ Gaps closed after phase 1:
   when the pointer reaches it. The page narrows while it is out; nothing of
   the chrome is drawn over the page.
 
+- **Panel sheet over pages:** the interface draws the panel sheet, and on
+  macOS native pages stand above the interface. While the sheet is open the
+  shell takes the pages off the stage (`PanelCommand::Sheet`), as it does
+  for a permission prompt, so the sheet is seen and its backdrop never
+  catches clicks unseen.
+- **Floating width:** a width grip in the strip's controls while the panel
+  floats; drag toward the page to widen, or use the arrow keys.
+
 Not done:
 
 - **Search in Web Panel:** WebKit gives the browser no hook for the

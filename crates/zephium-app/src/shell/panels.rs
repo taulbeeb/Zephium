@@ -162,6 +162,15 @@ impl Shell {
                 let target = (self.panels.open(profile) != Some(id)).then_some(id);
                 self.open_panel(profile, target)
             }
+            PanelCommand::Sheet(open) => {
+                if self.panel_sheet == open {
+                    return unchanged();
+                }
+                self.panel_sheet = open;
+                let mut native = super::effects::NativeWork::default();
+                native.record(self.relayout());
+                mutation_result(native)
+            }
             PanelCommand::PeekStrip(peek) => {
                 if !self.panel_strip_auto || self.panel_strip_peek == peek {
                     return unchanged();

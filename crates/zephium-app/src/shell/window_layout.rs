@@ -66,7 +66,8 @@ impl Shell {
         // A prompt in the sidebar needs neither: no page view overlaps it.
         let privileged_overlay_active = self.page_permission_modal()
             || self.active_browser_page().is_some()
-            || self.focus_covers();
+            || self.focus_covers()
+            || self.panel_sheet;
         // `Items` marks a prospective view resident before its CreateView
         // effect is dispatched. While the profile's first explicit native
         // policy is still compiling/installing, that effect is intentionally

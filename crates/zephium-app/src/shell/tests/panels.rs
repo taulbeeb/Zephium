@@ -539,3 +539,30 @@ fn a_waiting_strip_keeps_only_the_edge_until_the_pointer_brings_it_out() {
     assert!(done(panel_op(&mut shell, PanelCommand::PeekStrip(false))));
     assert_eq!(strip(&shell), padding);
 }
+
+#[test]
+fn pages_step_aside_while_the_panel_sheet_is_open() {
+    let (mut shell, engine, screen, _store) = browsed();
+    let tab = active_id(&screen);
+    navigate_and_commit(&mut shell, tab, "news.example");
+    let _panel = add(&mut shell, "chat.example");
+    let shown = |engine: &FakeEngine| {
+        engine
+            .layout_regions
+            .lock()
+            .unwrap()
+            .last()
+            .copied()
+            .flatten()
+    };
+    assert!(shown(&engine).is_some());
+    assert!(done(panel_op(&mut shell, PanelCommand::Sheet(true))));
+    // Nothing native stands over the interface's sheet.
+    assert_eq!(shown(&engine), None);
+    assert_eq!(
+        panel_op(&mut shell, PanelCommand::Sheet(true)).outcome,
+        OperationOutcome::NoOp
+    );
+    assert!(done(panel_op(&mut shell, PanelCommand::Sheet(false))));
+    assert!(shown(&engine).is_some());
+}

@@ -337,6 +337,9 @@ pub enum PanelCommand {
     Select(usize),
     /// Brings a waiting strip out while the pointer is at it, or back.
     PeekStrip(bool),
+    /// The panel sheet is drawn by the interface, beneath native pages; the
+    /// pages step aside while it is open, as for a permission prompt.
+    Sheet(bool),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

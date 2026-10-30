@@ -306,6 +306,21 @@ pub(crate) fn panels_peek_strip(
     dispatch(caller.app_handle(), &shell, PanelCommand::PeekStrip(peek))
 }
 
+/// The panel sheet opened or closed; pages step aside while it is open,
+/// since the interface draws it beneath them.
+#[tauri::command]
+#[specta::specta]
+pub(crate) fn panels_sheet(
+    caller: WebviewWindow,
+    shell: State<'_, Handle>,
+    open: bool,
+) -> OperationAdmission {
+    if !admitted(&caller, "panels_sheet") {
+        return super::rejected_operation();
+    }
+    dispatch(caller.app_handle(), &shell, PanelCommand::Sheet(open))
+}
+
 /// The tab menu's "Move Tab to Panels": the page moves, the tab closes.
 pub(crate) fn move_tab(app: &AppHandle, tab: ItemId) -> OperationAdmission {
     match app.try_state::<Handle>() {

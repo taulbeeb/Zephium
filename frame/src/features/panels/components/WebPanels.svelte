@@ -20,11 +20,23 @@
   // browser's first paint does not carry them.
   let PanelSheet = $state.raw<Sheet | null>(null);
 
+  // Native pages stand above the interface, which draws the sheet; they
+  // step aside before it opens and come back once it closes.
   async function sheet(panel: WebPanelView | null) {
     editing = panel;
     PanelSheet ??= (await import("./PanelSheet.svelte")).default;
+    await tabs.panelSheet(true);
     sheetOpen = true;
   }
+  let sheetShown = false;
+  $effect(() => {
+    if (sheetOpen) {
+      sheetShown = true;
+    } else if (sheetShown) {
+      sheetShown = false;
+      void tabs.panelSheet(false);
+    }
+  });
 
   // A strip set to wait keeps only the window's edge. Reaching the edge
   // brings it out; it goes back a moment after the pointer leaves it, or
