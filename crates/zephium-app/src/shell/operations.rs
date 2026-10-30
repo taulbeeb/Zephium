@@ -1030,6 +1030,7 @@ impl Shell {
                     mutation_result(native)
                 },
             ),
+            "panels.toggle" => self.operation_panel(crate::PanelCommand::Toggle),
             "space.next" => self.operation_space(crate::SpaceCommand::Step(1)),
             "space.previous" => self.operation_space(crate::SpaceCommand::Step(-1)),
             id if id.starts_with("space.select.") => id["space.select.".len()..]

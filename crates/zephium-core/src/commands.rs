@@ -223,6 +223,12 @@ pub const REGISTRY: &[CommandSpec] = &[
         Group::View,
     ),
     command(
+        "panels.toggle",
+        "Toggle Web Panel",
+        Keys::same("CmdOrCtrl+Shift+L"),
+        Group::View,
+    ),
+    command(
         "nav.reload",
         "Reload Page",
         Keys::same("CmdOrCtrl+R"),

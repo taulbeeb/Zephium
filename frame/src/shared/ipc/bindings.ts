@@ -443,6 +443,19 @@ export const commands = {
 	containersReopenTab: (tab: string, container: string | null) => __TAURI_INVOKE<OperationAdmission>("containers_reopen_tab", { tab, container }),
 	/**  The container a space's new tabs open in, or none. */
 	containersSetSpaceDefault: (space: string, container: string | null) => __TAURI_INVOKE<OperationAdmission>("containers_set_space_default", { space, container }),
+	/**  A new panel for an address, opened beside the page. */
+	panelsAdd: (url: string, container: string | null) => __TAURI_INVOKE<OperationAdmission>("panels_add", { url, container }),
+	panelsRemove: (panel: string) => __TAURI_INVOKE<OperationAdmission>("panels_remove", { panel }),
+	/**  Before another panel, or last with none. */
+	panelsMove: (panel: string, before: string | null) => __TAURI_INVOKE<OperationAdmission>("panels_move", { panel, before }),
+	/**  Shows a panel beside the page, or closes the open one with none. */
+	panelsOpen: (panel: string | null) => __TAURI_INVOKE<OperationAdmission>("panels_open", { panel }),
+	panelsResize: (panel: string, width: number | null) => __TAURI_INVOKE<OperationAdmission>("panels_resize", { panel, width }),
+	/**  Moves the panel to another container's store, rebuilding its page. */
+	panelsSetContainer: (panel: string, container: string | null) => __TAURI_INVOKE<OperationAdmission>("panels_set_container", { panel, container }),
+	/**  Goes to an address in the panel. */
+	panelsLoad: (panel: string, input: string) => __TAURI_INVOKE<OperationAdmission>("panels_load", { panel, input }),
+	panelsNavigate: (panel: string, action: PanelNavigationV1) => __TAURI_INVOKE<OperationAdmission>("panels_navigate", { panel, action }),
 	operationStatus: (operationId: string) => __TAURI_INVOKE<OperationStatus>("operation_status", { operationId }),
 	operationsReconcile: () => __TAURI_INVOKE<OperationDisposition[]>("operations_reconcile"),
 	operationAcknowledge: (operationId: string) => __TAURI_INVOKE<boolean>("operation_acknowledge", { operationId }),
@@ -1725,6 +1738,8 @@ export type ItemsState = {
 	split_group: SplitGroupView | null,
 	/**  The focused profile's containers, in creation order. */
 	containers?: ContainerView[],
+	/**  The focused profile's web panels, in strip order. */
+	web_panels?: WebPanelView[],
 };
 
 /**  The keymap changed; read it again. */
@@ -1773,6 +1788,8 @@ export type LayoutChanged = LayoutState;
 export type LayoutState = {
 	dividers: DividerView[],
 	work_pane: WorkPaneLayout | null,
+	/**  The icon strip and the open web panel, while the profile has panels. */
+	web_panel?: WebPanelLayout | null,
 };
 
 export type LoginItemStatus = {
@@ -2583,6 +2600,8 @@ export type PanelLayout = {
 	field: PanelRect,
 	sheet: PanelRect | null,
 };
+
+export type PanelNavigationV1 = "back" | "forward" | "reload";
 
 /**
  *  A rectangle in the launcher's own coordinates: CSS pixels from the top-left
@@ -3564,6 +3583,25 @@ export type WebExtensionView = {
 	has_options: boolean,
 	held_update: string | null,
 	sideloaded: boolean,
+};
+
+/**  Where the open web panel is docked, in window coordinates. */
+export type WebPanelLayout = {
+	x: number | null,
+	y: number | null,
+	width: number | null,
+	height: number | null,
+	/**  The icon strip's width at the window's trailing edge. */
+	strip: number | null,
+};
+
+/**  A site docked beside the page, shared by every space of the profile. */
+export type WebPanelView = {
+	/**  The panel's page, kept current by per-tab deltas like any tab's. */
+	tab: TabView,
+	/**  Points; the docked width when the window has room for it. */
+	width: number,
+	open: boolean,
 };
 
 /**

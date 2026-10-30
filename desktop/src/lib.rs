@@ -107,6 +107,7 @@ mod page_assist;
 mod page_source;
 #[cfg(target_os = "macos")]
 mod panel;
+mod panels;
 mod platform;
 mod presence;
 mod private_window;
@@ -1802,6 +1803,14 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             containers::containers_open_tab,
             containers::containers_reopen_tab,
             containers::containers_set_space_default,
+            panels::panels_add,
+            panels::panels_remove,
+            panels::panels_move,
+            panels::panels_open,
+            panels::panels_resize,
+            panels::panels_set_container,
+            panels::panels_load,
+            panels::panels_navigate,
             operation_status,
             operations_reconcile,
             operation_acknowledge,
@@ -3974,6 +3983,7 @@ fn execute_tab_menu_action(
             },
         ),
         "unkeep" => dispatch_operation(app, &shell, keep(false)),
+        panels::TAB_MENU_ADD => panels::add_tab(app, id),
         "split" => dispatch_operation(
             app,
             &shell,
@@ -5675,6 +5685,7 @@ fn build_menu(
         .item(&item("zoom.reset")?)
         .separator()
         .item(&item("sidebar.toggleCompact")?)
+        .item(&item("panels.toggle")?)
         .item(&appearance)
         .separator()
         .item(&item("url.focus")?)
@@ -6072,6 +6083,12 @@ fn build_tab_menu(
         item(4, "Add to Essentials", context.page)?
     };
     let split = item(6, "Open in Split View", context.can_split)?;
+    let add_panel = MenuItemBuilder::with_id(
+        format!("tabmenu.{}", panels::TAB_MENU_ADD),
+        menu_text::label("Add Page to Panels"),
+    )
+    .enabled(context.page)
+    .build(handle)?;
     let mute = if !zephium_engine::page_mute_supported() {
         None
     } else if context.muted {
@@ -6110,6 +6127,7 @@ fn build_tab_menu(
         &first,
         &keep,
         &split,
+        &add_panel,
     ];
     if let Some(move_to) = &move_to {
         items.push(move_to);
