@@ -512,3 +512,30 @@ fn a_link_from_the_page_menu_becomes_a_panel_in_the_page_container() {
     }));
     assert_eq!(shell.profile_panels(profile).len(), 1);
 }
+
+#[test]
+fn a_waiting_strip_keeps_only_the_edge_until_the_pointer_brings_it_out() {
+    let (mut shell, _engine, _screen, _store) = browsed();
+    let _panel = add(&mut shell, "chat.example");
+    let strip = |shell: &Shell| {
+        shell
+            .layout_metrics(shell.windows.focused().unwrap())
+            .panel_strip
+    };
+    assert_eq!(strip(&shell), zephium_core::panels::PANEL_STRIP_WIDTH);
+    // Peeking means nothing while the strip always shows.
+    assert_eq!(
+        panel_op(&mut shell, PanelCommand::PeekStrip(true)).outcome,
+        OperationOutcome::NoOp
+    );
+    let _ = shell.handle_operation(Command::SetAppSetting {
+        key: "panels.strip".into(),
+        value: "auto".into(),
+    });
+    let padding = shell.windows.focused().unwrap().metrics.padding;
+    assert_eq!(strip(&shell), padding);
+    assert!(done(panel_op(&mut shell, PanelCommand::PeekStrip(true))));
+    assert_eq!(strip(&shell), zephium_core::panels::PANEL_STRIP_WIDTH);
+    assert!(done(panel_op(&mut shell, PanelCommand::PeekStrip(false))));
+    assert_eq!(strip(&shell), padding);
+}

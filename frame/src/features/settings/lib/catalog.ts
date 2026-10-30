@@ -330,6 +330,16 @@ export const fields = {
       { value: "always", label: m.tabs_close_buttons_option_always },
     ],
   },
+  "panels.strip": {
+    section: "tabs",
+    label: m.panels_strip_pref,
+    description: m.panels_strip_pref_help,
+    initial: "always",
+    options: [
+      { value: "always", label: m.panels_strip_pref_always },
+      { value: "auto", label: m.panels_strip_pref_auto },
+    ],
+  },
   "tabs.archive": {
     section: "tabs",
     label: m.pref_tabs_archive,

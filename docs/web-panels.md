@@ -1,7 +1,7 @@
 # Web panels
 
-Status: phase 1 built on the `feat/web-panels` branch of this fork, on top
-of [containers](containers.md). Not an upstream feature.
+Status: phases 1 to 3 built on the `feat/web-panels` branch of this fork,
+on top of [containers](containers.md). Not an upstream feature.
 
 A web panel is a site kept docked beside the page, such as chat, music or
 mail. It stays open while you switch tabs and spaces, and it has its own icon
@@ -67,7 +67,7 @@ Multi-Account Containers.
 | Notification badge from the page title | Count parsed from the title the shell already holds | 2 |
 | Per-panel shortcuts | Keymap entries generated per panel | 2 |
 | Move Tab to Panel | Tab menu item; the tab is rebuilt as a panel | 2 |
-| Overlay mode (slide over the page) | A floating leaf the engine stacks over the tree, as the Work pane does | 3 |
+| Overlay mode (slide over the page) | `Axis::Over`: a floating leaf the stage draws above the tree | 3 |
 | Auto-hide strip, reveal on hover | The hidden-sidebar pattern, on the right | 3 |
 | Open Link / Search in Panel from the page menu | Page context-menu hook on macOS (`willOpenMenu`) and the WebView2 menu filter | 3 |
 | Show only one element (CSS selector) | A page-assist style for the panel's site | 3 |
@@ -134,7 +134,41 @@ Gaps closed after phase 1:
 - **Move Tab to Panels** on the tab menu: the page becomes a panel and the
   tab closes.
 
-Still to do: a custom icon, phase 3.
+## Phase 3 as built
+
+- **Slide over the page:** a panel can float over the page's trailing edge
+  instead of narrowing it, set in its sheet or with the pin button at the
+  strip's foot. The split engine has a third axis, `Axis::Over`, composed
+  at layout time and never stored: the page keeps its whole region and the
+  panel's rect overlaps it. The macOS stage sorts a floating page and its
+  cover above the other pages in place; Windows raises its container.
+  There is no divider at a floating panel's edge, so it is resized while
+  docked. It closes from its icon, the close button or the shortcut, not by
+  clicking the page: the engine reports no page clicks to the shell.
+- **Show only:** a CSS selector per panel. The shell builds a style that
+  hides everything but what the selector finds and fills the panel with it,
+  and hands it to the engine with `set_item_style`, which applies it with
+  the page styles. Selectors that could leave their rule (braces,
+  semicolons, comments, at-rules, escapes, unbalanced quotes) are refused.
+- **Custom icon:** a symbol or emoji, chosen as a space's is, drawn on the
+  strip instead of the site's icon.
+- **Open Link in Web Panel** in the page's own menu. On macOS, wry gains
+  `willOpenMenu:withEvent:`, where WebKit shows its real page menu; the item
+  runs WebKit's Open Link in New Window and marks the new-window request it
+  makes, which becomes a panel in the page's container instead of a tab.
+  On Windows it is a WebView2 custom item for http(s) links.
+- **Panel icons: Show at the edge** (Settings, Tabs, Web Panels). The strip
+  waits as the window's own 8 point edge, kept as chrome, and comes out
+  when the pointer reaches it. The page narrows while it is out; nothing of
+  the chrome is drawn over the page.
+
+Not done:
+
+- **Search in Web Panel:** WebKit gives the browser no hook for the
+  selected text in its menu. Type the search in the panel's address field.
+- **Padding and animation preferences:** the strip follows Zephium's own
+  density and Reduce Motion settings.
+- The menu item's title is English only.
 
 ## Decisions
 

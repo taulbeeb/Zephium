@@ -289,6 +289,8 @@ export const navigatePanel = (id: string, action: PanelNavigationV1) =>
 export const configurePanel = (id: string, settings: PanelSettingsInputV1) =>
   settle(commands.panelsConfigure(id, settings));
 export const zoomPanel = (id: string, step: PanelZoomV1) => settle(commands.panelsZoom(id, step));
+/** Brings a strip waiting at the window's edge out, or puts it back. */
+export const peekPanelStrip = (peek: boolean) => settle(commands.panelsPeekStrip(peek));
 /** The container a space's new tabs open in, or none with null. */
 export const setSpaceDefault = (space: string, container: string | null) =>
   settle(commands.containersSetSpaceDefault(space, container));

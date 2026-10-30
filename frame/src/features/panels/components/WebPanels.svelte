@@ -3,6 +3,8 @@
   import { tabs } from "$domain/tabs";
   import { layout } from "$domain/layout";
   import { uiCommands as ui } from "$domain/ui-commands";
+  import { preferences } from "$domain/preferences";
+  import { PANEL_STRIP_WIDTH } from "../lib/strip";
   import WebPanelStrip from "./WebPanelStrip.svelte";
   import PanelResizeHandle from "./PanelResizeHandle.svelte";
 
@@ -24,6 +26,23 @@
     sheetOpen = true;
   }
 
+  // A strip set to wait keeps only the window's edge. Reaching the edge
+  // brings it out; it goes back a moment after the pointer leaves it, or
+  // when the pointer never came onto it.
+  const waiting = $derived(!!place && place.strip < PANEL_STRIP_WIDTH);
+  const auto = $derived(preferences.value("panels.strip") === "auto");
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const after = (ms: number, peek: boolean) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => void tabs.peekPanelStrip(peek), ms);
+  };
+  const stay = () => clearTimeout(timer);
+  $effect(() => {
+    if (!auto || waiting) return;
+    after(1200, false);
+    return stay;
+  });
+
   let handledCommand = 0;
   $effect(() => {
     const command = ui.uiCommand();
@@ -34,12 +53,43 @@
   });
 </script>
 
-{#if place}
-  <WebPanelStrip
-    width={place.strip}
-    onadd={() => void sheet(null)}
-    onedit={(panel) => void sheet(panel)}
-  />
+{#if place && waiting}
+  <div
+    class="edge"
+    style:inline-size={`${place.strip}px`}
+    aria-hidden="true"
+    onpointerenter={() => after(90, true)}
+    onpointerleave={stay}
+  ></div>
+{:else if place}
+  <div
+    class="strip-host"
+    role="presentation"
+    onpointerenter={auto ? stay : undefined}
+    onpointerleave={auto ? () => after(450, false) : undefined}
+  >
+    <WebPanelStrip
+      width={place.strip}
+      onadd={() => void sheet(null)}
+      onedit={(panel) => {
+        stay();
+        void sheet(panel);
+      }}
+    />
+  </div>
   {#if open && place.width > 0}<PanelResizeHandle {place} panel={open.tab.id} />{/if}
 {/if}
 {#if PanelSheet}<PanelSheet bind:open={sheetOpen} panel={editing} />{/if}
+
+<style>
+  /* The window's own edge, kept as chrome so the pointer can reach it. */
+  .edge {
+    position: fixed;
+    inset-block: 0;
+    inset-inline-end: 0;
+  }
+
+  .strip-host {
+    display: contents;
+  }
+</style>

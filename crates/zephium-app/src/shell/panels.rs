@@ -162,6 +162,15 @@ impl Shell {
                 let target = (self.panels.open(profile) != Some(id)).then_some(id);
                 self.open_panel(profile, target)
             }
+            PanelCommand::PeekStrip(peek) => {
+                if !self.panel_strip_auto || self.panel_strip_peek == peek {
+                    return unchanged();
+                }
+                self.panel_strip_peek = peek;
+                let mut native = super::effects::NativeWork::default();
+                native.record(self.relayout_with(true));
+                mutation_result(native)
+            }
         }
     }
 
@@ -508,7 +517,13 @@ impl Shell {
             && self.panel_scope() == Some(window.profile)
             && !self.profile_panels(window.profile).is_empty();
         if strip {
-            metrics.panel_strip = PANEL_STRIP_WIDTH;
+            // A waiting strip keeps only the window's own edge, as chrome,
+            // so the pointer reaching it can bring the strip out.
+            metrics.panel_strip = if self.panel_strip_auto && !self.panel_strip_peek {
+                metrics.padding
+            } else {
+                PANEL_STRIP_WIDTH
+            };
         }
         if let Some(id) = self.shown_panel() {
             metrics.panel = f64::from(self.panels.width(id));

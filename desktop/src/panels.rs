@@ -292,6 +292,20 @@ pub(crate) fn panels_zoom(
     }
 }
 
+/// Brings a strip waiting at the window's edge out, or puts it back.
+#[tauri::command]
+#[specta::specta]
+pub(crate) fn panels_peek_strip(
+    caller: WebviewWindow,
+    shell: State<'_, Handle>,
+    peek: bool,
+) -> OperationAdmission {
+    if !admitted(&caller, "panels_peek_strip") {
+        return super::rejected_operation();
+    }
+    dispatch(caller.app_handle(), &shell, PanelCommand::PeekStrip(peek))
+}
+
 /// The tab menu's "Move Tab to Panels": the page moves, the tab closes.
 pub(crate) fn move_tab(app: &AppHandle, tab: ItemId) -> OperationAdmission {
     match app.try_state::<Handle>() {

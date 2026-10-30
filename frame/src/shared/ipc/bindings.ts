@@ -459,6 +459,8 @@ export const commands = {
 	/**  Replaces a panel's name, lifecycle timers and layout choice. */
 	panelsConfigure: (panel: string, settings: PanelSettingsInputV1) => __TAURI_INVOKE<OperationAdmission>("panels_configure", { panel, settings }),
 	panelsZoom: (panel: string, step: PanelZoomV1) => __TAURI_INVOKE<OperationAdmission>("panels_zoom", { panel, step }),
+	/**  Brings a strip waiting at the window's edge out, or puts it back. */
+	panelsPeekStrip: (peek: boolean) => __TAURI_INVOKE<OperationAdmission>("panels_peek_strip", { peek }),
 	operationStatus: (operationId: string) => __TAURI_INVOKE<OperationStatus>("operation_status", { operationId }),
 	operationsReconcile: () => __TAURI_INVOKE<OperationDisposition[]>("operations_reconcile"),
 	operationAcknowledge: (operationId: string) => __TAURI_INVOKE<boolean>("operation_acknowledge", { operationId }),

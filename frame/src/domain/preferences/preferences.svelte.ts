@@ -61,6 +61,7 @@ const defaults = {
   "tabs.archive": "never",
   "tabs.external-position": "new-tab",
   "tabs.close-button": "hover",
+  "panels.strip": "always",
   "notes.enabled": "true",
   "tasks.enabled": "true",
   "time.enabled": "true",

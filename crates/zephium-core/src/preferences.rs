@@ -60,6 +60,7 @@ pub const KEYS: &[&str] = &[
     "tabs.archive",
     "tabs.external-position",
     "tabs.close-button",
+    "panels.strip",
     "ui.theme-contrast",
     "notes.enabled",
     "tasks.enabled",
@@ -231,6 +232,8 @@ pub fn value_allowed(key: &str, value: &str) -> bool {
         // How long a Today tab may sit unused before it closes into History.
         "tabs.archive" => matches!(value, "never" | "12h" | "1d" | "7d"),
         "tabs.close-button" => matches!(value, "hover" | "always"),
+        // The web panel strip stays, or waits at the window's edge.
+        "panels.strip" => matches!(value, "always" | "auto"),
         "tabs.after-close" => matches!(value, "next" | "previous" | "recent"),
         // A new tab in front at launch; everything restored stays in the sidebar.
         "tabs.startup" => matches!(value, "continue" | "new-tab" | "pages"),
@@ -589,6 +592,9 @@ mod tests {
         }
         assert!(!value_allowed("tabs.external-position", "window"));
         assert!(value_allowed("tabs.close-button", "always"));
+        assert!(KEYS.contains(&"panels.strip"));
+        assert!(value_allowed("panels.strip", "auto"));
+        assert!(!value_allowed("panels.strip", "never"));
         assert!(!value_allowed("tabs.close-button", "never"));
     }
 

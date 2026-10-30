@@ -20,6 +20,9 @@
     preference="tabs.close-button"
   /></SettingsGroup
 >
+<SettingsGroup title={m.panels_group()}
+  ><PreferenceSelect id="panels.strip" preference="panels.strip" /></SettingsGroup
+>
 <SettingsGroup title={m.tabs_group_archive()}
   ><PreferenceSelect id="tabs.archive" preference="tabs.archive" /></SettingsGroup
 >

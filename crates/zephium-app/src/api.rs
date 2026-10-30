@@ -335,6 +335,8 @@ pub enum PanelCommand {
     /// Shows the profile's panel at this place in the strip, from 1, or
     /// closes it when it is the one open.
     Select(usize),
+    /// Brings a waiting strip out while the pointer is at it, or back.
+    PeekStrip(bool),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

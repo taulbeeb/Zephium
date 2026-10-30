@@ -228,6 +228,10 @@ pub struct Shell {
     /// The panel each profile had open last, for the toggle. Runtime only.
     panel_last: std::collections::HashMap<ProfileId, ItemId>,
     panel_timers: panels::PanelTimers,
+    /// The strip waits at the window's edge until the pointer reaches it.
+    panel_strip_auto: bool,
+    /// The waiting strip is out while the pointer is over it.
+    panel_strip_peek: bool,
     spaces: Spaces,
     items: Items,
     recently_closed: Vec<zephium_core::session::PersistedClosedTab>,
@@ -476,6 +480,8 @@ impl Shell {
             panels: Default::default(),
             panel_last: Default::default(),
             panel_timers: Default::default(),
+            panel_strip_auto: store.app_setting("panels.strip").as_deref() == Some("auto"),
+            panel_strip_peek: false,
             spaces: Spaces::default(),
             items: Items::default(),
             recently_closed: Vec::new(),
