@@ -172,9 +172,10 @@ impl EngineHost {
                 .emit_for(event_token, EngineEvent::ViewCreationFailed { id });
             return;
         }
-        #[cfg(any(not(all(unix, not(target_os = "macos"))), test))]
         // A warm spare carries the desktop user agent.
+        #[cfg(any(not(all(unix, not(target_os = "macos"))), test))]
         let mobile = self.mobile_views.contains(&id);
+        #[cfg(any(not(all(unix, not(target_os = "macos"))), test))]
         if let Some(mut spare) = self.spare.take_if(|s| s.partition == partition && !mobile) {
             if let Err(error) = spare
                 .view
@@ -1308,6 +1309,21 @@ impl EngineHost {
                     )
                 });
             }
+            // "Open Link in Web Panel" runs WebKit's new-window item and
+            // marks the request it makes, which then becomes a panel.
+            #[cfg(target_os = "macos")]
+            let panel_intent = crate::platform::imp::panel_menu::PanelIntent::default();
+            #[cfg(target_os = "macos")]
+            {
+                use wry::WebViewBuilderExtMacos;
+                let intent = panel_intent.clone();
+                let kept = std::cell::RefCell::new(None);
+                builder = builder.with_menu_will_open_handler(move |menu, _event| {
+                    crate::platform::imp::panel_menu::add_open_in_panel(menu, &intent, &kept);
+                });
+            }
+            #[cfg(target_os = "macos")]
+            let panel_sink = self.sink.clone();
             let source = id.clone();
             let permit = event_permit.clone();
             let tracker = navigation.clone();
@@ -1317,6 +1333,17 @@ impl EngineHost {
             let popup_app_link = app_link.clone();
             let popup_policy = popup_policy.clone();
             builder = builder.with_new_window_req_handler(move |url, mut features| {
+                #[cfg(target_os = "macos")]
+                if panel_intent.take() {
+                    permit.emit(
+                        &panel_sink,
+                        EngineEvent::OpenInPanelRequested {
+                            id: source.get(),
+                            url,
+                        },
+                    );
+                    return wry::NewWindowResponse::Deny;
+                }
                 features.user_initiated = popup_policy.admits(
                     features.user_initiated,
                     tracker
@@ -1452,6 +1479,8 @@ impl EngineHost {
                 let menu_navigation = navigation.clone();
                 let menu_presentation = presentation_permit.clone();
                 let menu_save = resource_save.clone();
+                let menu_sink = self.sink.clone();
+                let menu_item = id.clone();
                 builder = builder.with_native_context_menu_handler(move |controller, args| {
                     let admitted = super::page_open::filter_windows_context_menu(
                         &menu_permit,
@@ -1461,6 +1490,15 @@ impl EngineHost {
                         args,
                     );
                     menu_save.menu(&menu_navigation, args, admitted);
+                    if admitted {
+                        super::page_open::add_windows_panel_item(
+                            &menu_permit,
+                            &menu_sink,
+                            menu_item.get(),
+                            controller,
+                            args,
+                        );
+                    }
                     admitted
                 });
             }

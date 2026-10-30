@@ -38,6 +38,8 @@ pub struct WryWebViewIvars {
   #[cfg(target_os = "macos")]
   pub(crate) context_menu_handler:
     Option<Box<dyn Fn(&NSEvent, Option<Retained<NSMenu>>) -> Option<Retained<NSMenu>>>>,
+  #[cfg(target_os = "macos")]
+  pub(crate) menu_will_open_handler: Option<Box<dyn Fn(&NSMenu, &NSEvent)>>,
   #[cfg(target_os = "ios")]
   pub(crate) input_accessory_view_builder: Option<Box<crate::InputAccessoryViewBuilder>>,
   /// `Some` while the view's tracking areas are parked: the ones WebKit
@@ -162,6 +164,20 @@ define_class!(
         }))
         .unwrap_or(None)
       })()
+    }
+
+    /// WebKit builds a page's menu from the web process's hit test and
+    /// shows it without `menuForEvent:`; this is the last moment to add
+    /// browser items to the menu it is about to show.
+    #[cfg(target_os = "macos")]
+    #[unsafe(method(willOpenMenu:withEvent:))]
+    fn will_open_menu(&self, menu: &NSMenu, event: &NSEvent) {
+      unsafe {
+        let _: () = objc2::msg_send![super(self), willOpenMenu: menu, withEvent: event];
+      }
+      if let Some(handler) = &self.ivars().menu_will_open_handler {
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| handler(menu, event)));
+      }
     }
 
     #[cfg(target_os = "ios")]

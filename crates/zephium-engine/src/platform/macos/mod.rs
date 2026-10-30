@@ -78,6 +78,7 @@ pub(crate) use work_human_presentation::WorkHumanPresentation;
 pub(crate) use work_observation_presentation::retained_page_hidden;
 #[cfg(feature = "agentic-browser")]
 pub(crate) use work_observation_presentation::{PresentationState, WorkObservationPresentation};
+pub(crate) mod panel_menu;
 mod pointer_cover;
 mod stage;
 mod webext_action_icon;

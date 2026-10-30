@@ -486,3 +486,29 @@ fn a_floating_panel_leaves_the_page_its_width_and_isolates_its_selector() {
     assert!(done(panel_op(&mut shell, PanelCommand::Remove(panel))));
     assert!(engine.calls().contains(&format!("style {panel} false")));
 }
+
+#[test]
+fn a_link_from_the_page_menu_becomes_a_panel_in_the_page_container() {
+    let (mut shell, _engine, screen, _store) = browsed();
+    let tab = active_id(&screen);
+    navigate_and_commit(&mut shell, tab, "news.example");
+    let profile = profile(&shell);
+    shell.handle(Command::Engine(EngineEvent::OpenInPanelRequested {
+        id: tab,
+        url: "https://chat.example/".into(),
+    }));
+    let panels = shell.profile_panels(profile);
+    assert_eq!(panels.len(), 1);
+    assert_eq!(shell.panels.open(profile), Some(panels[0]));
+    assert_eq!(active_id(&screen), tab);
+    // A page out of scope, or a link that is not a web page, adds nothing.
+    shell.handle(Command::Engine(EngineEvent::OpenInPanelRequested {
+        id: ItemId::generate(),
+        url: "https://other.example/".into(),
+    }));
+    shell.handle(Command::Engine(EngineEvent::OpenInPanelRequested {
+        id: tab,
+        url: "file:///etc/passwd".into(),
+    }));
+    assert_eq!(shell.profile_panels(profile).len(), 1);
+}

@@ -357,6 +357,22 @@ impl Shell {
         mutation_result(native)
     }
 
+    /// A link a page's menu asked to open as a panel: a new panel in the
+    /// page's own container, shown beside it.
+    pub(super) fn open_link_in_panel(&mut self, source: ItemId, url: &str) {
+        let Some((profile, space)) = self.windows.focused().map(|win| (win.profile, win.space))
+        else {
+            return;
+        };
+        if self.panel_scope() != Some(profile)
+            || !(self.item_in_scope(source, profile, space) || self.panel_in_scope(source, profile))
+        {
+            return;
+        }
+        let container = self.items.tab(source).and_then(|tab| tab.container());
+        let _ = self.add_panel(profile, url, container);
+    }
+
     pub(super) fn panel_wake(&mut self) {
         let now = std::time::Instant::now();
         let shown = self.shown_panel();

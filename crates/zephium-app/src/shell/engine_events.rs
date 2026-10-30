@@ -414,6 +414,7 @@ impl Shell {
                 }
             }
             EngineEvent::NewWindowRequested { id, url } => self.open_linked_tab(id, &url),
+            EngineEvent::OpenInPanelRequested { id, url } => self.open_link_in_panel(id, &url),
             EngineEvent::WorkPageFavicon {
                 profile,
                 page_url,
@@ -780,6 +781,7 @@ impl Shell {
             | EngineEvent::NativeTabOpened { id, .. }
             | EngineEvent::LinkedDownloadStarted { id }
             | EngineEvent::NewWindowRequested { id, .. }
+            | EngineEvent::OpenInPanelRequested { id, .. }
             | EngineEvent::DownloadRequested { id, .. }
             | EngineEvent::ViewCreationFailed { id }
             | EngineEvent::Crashed { id }

@@ -1697,6 +1697,11 @@ pub enum EngineEvent {
         id: ItemId,
         url: String,
     },
+    /// The person chose "Open Link in Web Panel" in the page's own menu.
+    OpenInPanelRequested {
+        id: ItemId,
+        url: String,
+    },
     PermissionRequested {
         id: ItemId,
         profile: ProfileId,

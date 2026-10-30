@@ -331,6 +331,87 @@ pub(super) fn filter_windows_context_menu(
     navigation.matches_activity(activity)
         && windows_context_foreground(permit, presented, controller)
 }
+/// Adds "Open Link in Web Panel" after "Open link in new window" when the
+/// menu is for a web link. Runs on an admitted menu only.
+#[cfg(target_os = "windows")]
+pub(super) fn add_windows_panel_item(
+    permit: &EventPermit,
+    sink: &super::permits::Sink,
+    source: ItemId,
+    controller: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Controller,
+    args: &webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2ContextMenuRequestedEventArgs,
+) {
+    use webview2_com::Microsoft::Web::WebView2::Win32::{
+        ICoreWebView2Environment9, ICoreWebView2_2, COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_COMMAND,
+    };
+    use windows::core::{Interface, HSTRING, PWSTR};
+    let Ok(target) = (unsafe { args.ContextMenuTarget() }) else {
+        return;
+    };
+    let mut link = windows::core::BOOL::default();
+    if unsafe { target.HasLinkUri(&mut link) }.is_err() || !link.as_bool() {
+        return;
+    }
+    let mut raw = PWSTR::null();
+    if unsafe { target.LinkUri(&mut raw) }.is_err() {
+        return;
+    }
+    let url = webview2_com::take_pwstr(raw);
+    if url.len() > 8 * 1024 || !(url.starts_with("https://") || url.starts_with("http://")) {
+        return;
+    }
+    let Ok(environment) = (unsafe {
+        controller
+            .CoreWebView2()
+            .and_then(|core| core.cast::<ICoreWebView2_2>())
+            .and_then(|core| core.Environment())
+            .and_then(|environment| environment.cast::<ICoreWebView2Environment9>())
+    }) else {
+        return;
+    };
+    let label = HSTRING::from("Open Link in Web Panel");
+    let Ok(item) = (unsafe {
+        environment.CreateContextMenuItem(
+            &label,
+            None::<&windows::Win32::System::Com::IStream>,
+            COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_COMMAND,
+        )
+    }) else {
+        return;
+    };
+    let (permit, sink) = (permit.clone(), sink.clone());
+    let chosen = webview2_com::CustomItemSelectedEventHandler::create(Box::new(move |_, _| {
+        permit.emit(
+            &sink,
+            EngineEvent::OpenInPanelRequested {
+                id: source,
+                url: url.clone(),
+            },
+        );
+        Ok(())
+    }));
+    let mut token = 0;
+    if unsafe { item.add_CustomItemSelected(&chosen, &mut token) }.is_err() {
+        return;
+    }
+    let Ok(items) = (unsafe { args.MenuItems() }) else {
+        return;
+    };
+    let mut count = 0;
+    if unsafe { items.Count(&mut count) }.is_err() {
+        return;
+    }
+    let after = (0..count).find(|index| {
+        let Ok(entry) = (unsafe { items.GetValueAtIndex(*index) }) else {
+            return false;
+        };
+        let mut name = PWSTR::null();
+        unsafe { entry.Name(&mut name) }.is_ok()
+            && webview2_com::take_pwstr(name) == "openLinkInNewWindow"
+    });
+    let _ = unsafe { items.InsertValueAtIndex(after.map_or(0, |index| index + 1), &item) };
+}
+
 #[cfg(any(target_os = "windows", test))]
 pub(super) fn windows_menu_item_allowed(name: &str) -> bool {
     matches!(
