@@ -77,7 +77,10 @@
       }}
     />
   </div>
-  {#if open && place.width > 0}<PanelResizeHandle {place} panel={open.tab.id} />{/if}
+  {#if open && place.width > 0 && !open.settings.floating}<PanelResizeHandle
+      {place}
+      panel={open.tab.id}
+    />{/if}
 {/if}
 {#if PanelSheet}<PanelSheet bind:open={sheetOpen} panel={editing} />{/if}
 

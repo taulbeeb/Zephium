@@ -20,6 +20,7 @@
   import { containerHue } from "$shared/lib/container-hue";
   import { SpaceGlyph } from "$features/tabs";
   import { badgeText, unreadCount } from "../lib/badge";
+  import PanelWidthGrip from "./PanelWidthGrip.svelte";
 
   let {
     width,
@@ -178,6 +179,7 @@
         label={m.panels_zoom_out()}
         onclick={() => void tabs.zoomPanel(open.tab.id, "out")}
       />
+      {#if open.settings.floating}<PanelWidthGrip panel={open.tab.id} width={open.width} />{/if}
       <IconButton
         icon={open.settings.floating ? PinIcon : PinOffIcon}
         label={open.settings.floating ? m.panels_dock() : m.panels_float()}

@@ -3906,6 +3906,7 @@
   "panels_mobile": "Ask for the mobile site",
   "panels_mobile_note": "Many sites fit a narrow panel better this way. The page reloads.",
   "panels_dock": "Keep Beside the Page",
+  "panels_resize_floating": "Drag toward the page to widen the panel, or away to narrow it",
   "panels_group": "Web Panels",
   "panels_strip_pref": "Panel icons",
   "panels_strip_pref_help": "Keep the strip of web panel icons at the window's edge, or show it when the pointer reaches that edge.",
