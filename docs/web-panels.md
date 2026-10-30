@@ -143,8 +143,10 @@ Gaps closed after phase 1:
   panel's rect overlaps it. The macOS stage sorts a floating page and its
   cover above the other pages in place; Windows raises its container.
   There is no divider at a floating panel's edge, so it is resized while
-  docked. It closes from its icon, the close button or the shortcut, not by
-  clicking the page: the engine reports no page clicks to the shell.
+  docked. A press beside it, away from the strip, puts it away: pages take
+  their own presses, so the desktop watches presses natively (an app-local
+  event monitor on macOS, the button state on the edge timer on Windows)
+  while a floating panel is open.
 - **Show only:** a CSS selector per panel. The shell builds a style that
   hides everything but what the selector finds and fills the panel with it,
   and hands it to the engine with `set_item_style`, which applies it with

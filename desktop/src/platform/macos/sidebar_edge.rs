@@ -136,3 +136,89 @@ pub fn watch_side(window: &WebviewWindow, right: bool, on: bool) {
         }
     });
 }
+
+thread_local! {
+    static CLICKS: RefCell<Vec<(isize, WebviewWindow)>> = const { RefCell::new(Vec::new()) };
+    static CLICK_MONITOR: RefCell<Option<Retained<AnyObject>>> = const { RefCell::new(None) };
+}
+
+/// A press anywhere in a watched window, in its content's top-left points.
+/// Pages take their own presses, so the chrome learns of them here.
+fn pressed(event: &NSEvent) {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let Some(window) = event.window(mtm) else {
+        return;
+    };
+    let number = window.windowNumber();
+    let Some(watched) = CLICKS.with(|clicks| {
+        clicks
+            .try_borrow()
+            .ok()?
+            .iter()
+            .find(|(watched, _)| *watched == number)
+            .map(|(_, window)| window.clone())
+    }) else {
+        return;
+    };
+    let at = event.locationInWindow();
+    let height = window
+        .contentView()
+        .map_or(window.frame().size.height, |view| view.frame().size.height);
+    crate::emit_to_privileged(
+        watched.app_handle(),
+        watched.label(),
+        "zephium:pointer-down",
+        &serde_json::json!({ "x": at.x, "y": height - at.y }),
+    );
+}
+
+/// Starts or stops watching presses in `window`. Runs on the main thread.
+pub fn watch_clicks(window: &WebviewWindow, on: bool) {
+    if MainThreadMarker::new().is_none() {
+        return;
+    }
+    let Ok(pointer) = window.ns_window() else {
+        return;
+    };
+    // SAFETY: Tao's live NSWindow, borrowed for this main-thread call only.
+    let number = unsafe { &*(pointer as *const NSWindow) }.windowNumber();
+    let watching = CLICKS.with(|clicks| {
+        let mut clicks = clicks.borrow_mut();
+        clicks.retain(|(watched, _)| *watched != number);
+        if on {
+            clicks.push((number, window.clone()));
+        }
+        !clicks.is_empty()
+    });
+    CLICK_MONITOR.with(|monitor| {
+        let mut monitor = monitor.borrow_mut();
+        match (watching, monitor.is_some()) {
+            (true, false) => {
+                let handler = RcBlock::new(|event: NonNull<NSEvent>| -> *mut NSEvent {
+                    // SAFETY: the local monitor lends its event for this call.
+                    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        pressed(unsafe { event.as_ref() })
+                    }));
+                    event.as_ptr()
+                });
+                // SAFETY: an app-local main-thread monitor that hands every
+                // event back untouched.
+                *monitor = unsafe {
+                    NSEvent::addLocalMonitorForEventsMatchingMask_handler(
+                        NSEventMask::LeftMouseDown | NSEventMask::RightMouseDown,
+                        &handler,
+                    )
+                };
+            }
+            (false, true) => {
+                if let Some(old) = monitor.take() {
+                    // SAFETY: this exact registration is removed once.
+                    unsafe { NSEvent::removeMonitor(&old) };
+                }
+            }
+            _ => {}
+        }
+    });
+}

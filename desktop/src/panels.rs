@@ -320,6 +320,16 @@ pub(crate) fn panels_watch_edge(caller: WebviewWindow, waiting: bool) {
     }
 }
 
+/// A floating panel opened or went; presses in the window are watched while
+/// it is open, since pages take their own presses.
+#[tauri::command]
+#[specta::specta]
+pub(crate) fn panels_watch_clicks(caller: WebviewWindow, watching: bool) {
+    if admitted(&caller, "panels_watch_clicks") {
+        super::platform::imp::panel_clicks(&caller, watching);
+    }
+}
+
 /// The panel sheet opened or closed; pages step aside while it is open,
 /// since the interface draws it beneath them.
 #[tauri::command]

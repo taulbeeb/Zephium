@@ -471,6 +471,11 @@ export const commands = {
 	 *  is watched natively while it waits, since the page takes the pointer.
 	 */
 	panelsWatchEdge: (waiting: boolean) => __TAURI_INVOKE<void>("panels_watch_edge", { waiting }),
+	/**
+	 *  A floating panel opened or went; presses in the window are watched while
+	 *  it is open, since pages take their own presses.
+	 */
+	panelsWatchClicks: (watching: boolean) => __TAURI_INVOKE<void>("panels_watch_clicks", { watching }),
 	operationStatus: (operationId: string) => __TAURI_INVOKE<OperationStatus>("operation_status", { operationId }),
 	operationsReconcile: () => __TAURI_INVOKE<OperationDisposition[]>("operations_reconcile"),
 	operationAcknowledge: (operationId: string) => __TAURI_INVOKE<boolean>("operation_acknowledge", { operationId }),

@@ -15,6 +15,7 @@ use tauri::{Manager, WebviewWindow};
 use windows::Win32::Foundation::{HWND, POINT, RECT};
 use windows::Win32::Graphics::Gdi::ScreenToClient;
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
+use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON};
 use windows::Win32::UI::WindowsAndMessaging::{
     GetAncestor, GetClientRect, GetCursorPos, GetForegroundWindow, IsIconic, IsWindow, KillTimer,
     SetTimer, WindowFromPoint, GA_ROOTOWNER,
@@ -37,7 +38,16 @@ struct Edge {
     last: Option<f64>,
 }
 
+/// A window whose presses are watched while a floating panel is open, so a
+/// press on the page beside it can close it.
+struct Clicks {
+    window: WebviewWindow,
+    hwnd: HWND,
+    down: bool,
+}
+
 thread_local! {
+    static CLICKS: RefCell<Vec<Clicks>> = const { RefCell::new(Vec::new()) };
     static EDGES: RefCell<Vec<Edge>> = const { RefCell::new(Vec::new()) };
     static TIMER: Cell<Option<(usize, u32)>> = const { Cell::new(None) };
 }
@@ -68,6 +78,39 @@ pub fn watch_side(window: &WebviewWindow, right: bool, on: bool) {
         !edges.is_empty()
     });
     if any {
+        arm(WATCHING_MS);
+    } else {
+        rearm();
+    }
+}
+
+/// Starts or stops watching presses in `window`.
+pub fn watch_clicks(window: &WebviewWindow, on: bool) {
+    let Ok(hwnd) = window.hwnd() else {
+        return;
+    };
+    let hwnd = HWND(hwnd.0);
+    CLICKS.with(|clicks| {
+        let mut clicks = clicks.borrow_mut();
+        clicks.retain(|watched| watched.hwnd != hwnd);
+        if on {
+            clicks.push(Clicks {
+                window: window.clone(),
+                hwnd,
+                down: true,
+            });
+        }
+    });
+    rearm();
+}
+
+fn watched() -> bool {
+    EDGES.with(|edges| edges.try_borrow().is_ok_and(|edges| !edges.is_empty()))
+        || CLICKS.with(|clicks| clicks.try_borrow().is_ok_and(|clicks| !clicks.is_empty()))
+}
+
+fn rearm() {
+    if watched() {
         arm(WATCHING_MS);
     } else {
         disarm();
@@ -146,8 +189,39 @@ fn read() {
             &serde_json::json!({ "near": near }),
         );
     }
-    let any = EDGES.with(|edges| edges.try_borrow().is_ok_and(|edges| !edges.is_empty()));
-    if any {
+    // SAFETY: plain reads of the buttons' current state.
+    let pressed = unsafe {
+        (GetAsyncKeyState(i32::from(VK_LBUTTON.0)) as u16 & 0x8000 != 0)
+            || (GetAsyncKeyState(i32::from(VK_RBUTTON.0)) as u16 & 0x8000 != 0)
+    };
+    let mut presses = Vec::new();
+    CLICKS.with(|clicks| {
+        let Ok(mut clicks) = clicks.try_borrow_mut() else {
+            return;
+        };
+        // SAFETY: a plain query of a handle value.
+        clicks.retain(|watched| unsafe { IsWindow(Some(watched.hwnd)) }.as_bool());
+        for watched in clicks.iter_mut() {
+            let in_front = is_front(watched.hwnd, front);
+            watching |= in_front;
+            if pressed && !watched.down && in_front {
+                if let Some((x, y, _)) = cursor.and_then(|cursor| local_point(watched.hwnd, cursor))
+                {
+                    presses.push((watched.window.clone(), x, y));
+                }
+            }
+            watched.down = pressed;
+        }
+    });
+    for (window, x, y) in presses {
+        crate::emit_to_privileged(
+            window.app_handle(),
+            window.label(),
+            "zephium:pointer-down",
+            &serde_json::json!({ "x": x, "y": y }),
+        );
+    }
+    if watched() {
         arm(if watching { WATCHING_MS } else { WAITING_MS });
     } else {
         disarm();
@@ -167,6 +241,12 @@ fn is_front(window: HWND, front: HWND) -> bool {
 /// width, in DIPs, when it is over the window itself and not another one
 /// laid over it.
 fn local_x(window: HWND, cursor: POINT) -> Option<(f64, f64)> {
+    local_point(window, cursor).map(|(x, _, width)| (x, width))
+}
+
+/// The pointer in the window's client area, and the client width, in DIPs,
+/// when it is over the window itself and not another one laid over it.
+fn local_point(window: HWND, cursor: POINT) -> Option<(f64, f64, f64)> {
     let mut at = cursor;
     let mut client = RECT::default();
     // SAFETY: plain reads of a live window's client area and DPI, and of the
@@ -182,7 +262,11 @@ fn local_x(window: HWND, cursor: POINT) -> Option<(f64, f64)> {
         (at.x >= 0 && at.y >= 0 && at.x < client.right && at.y < client.bottom && dpi != 0).then(
             || {
                 let scale = 96.0 / f64::from(dpi);
-                (f64::from(at.x) * scale, f64::from(client.right) * scale)
+                (
+                    f64::from(at.x) * scale,
+                    f64::from(at.y) * scale,
+                    f64::from(client.right) * scale,
+                )
             },
         )
     }

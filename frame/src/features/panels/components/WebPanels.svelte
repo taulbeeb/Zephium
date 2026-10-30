@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import type { WebPanelView } from "$shared/ipc/bindings";
   import { tabs } from "$domain/tabs";
   import { layout } from "$domain/layout";
@@ -70,6 +71,29 @@
     return () => {
       window.removeEventListener("zephium:panel-edge", edge);
       void tabs.watchPanelEdge(false);
+    };
+  });
+
+  // A floating panel lies over the page, which takes its own presses; native
+  // reports them while one is open, and a press beside the panel and away
+  // from the strip puts it away.
+  const floatingOpen = $derived(!!open && open.settings.floating && !!place && place.width > 0);
+  $effect(() => {
+    if (!floatingOpen) return;
+    void tabs.watchPanelClicks(true);
+    const press = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return;
+      const { x, y } = event.detail ?? {};
+      const at = untrack(() => place);
+      if (typeof x !== "number" || typeof y !== "number" || !at) return;
+      const inPanel = x >= at.x && x <= at.x + at.width && y >= at.y && y <= at.y + at.height;
+      const onStrip = x >= window.innerWidth - Math.max(at.strip, 8);
+      if (!inPanel && !onStrip && !sheetOpen) void tabs.openPanelBeside(null);
+    };
+    window.addEventListener("zephium:pointer-down", press);
+    return () => {
+      window.removeEventListener("zephium:pointer-down", press);
+      void tabs.watchPanelClicks(false);
     };
   });
 

@@ -642,6 +642,13 @@ thread_local! {
 
 /// The sidebar is hidden or back: the pointer is read for its left edge
 /// while it is away.
+/// A floating panel is open or gone; presses in the window are watched
+/// while it is, so a press on the page can put it away.
+pub fn panel_clicks(window: &WebviewWindow, watching: bool) {
+    let owner = window.clone();
+    let _ = window.run_on_main_thread(move || sidebar_edge::watch_clicks(&owner, watching));
+}
+
 /// A panel strip waits at the window's right edge, beneath the page; that
 /// edge is watched while it waits, as a hidden sidebar's is.
 pub fn panel_edge(window: &WebviewWindow, waiting: bool) {

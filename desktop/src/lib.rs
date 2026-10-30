@@ -1816,6 +1816,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
             panels::panels_peek_strip,
             panels::panels_sheet,
             panels::panels_watch_edge,
+            panels::panels_watch_clicks,
             operation_status,
             operations_reconcile,
             operation_acknowledge,

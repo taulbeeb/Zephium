@@ -291,6 +291,8 @@ export const configurePanel = (id: string, settings: PanelSettingsInputV1) =>
 export const zoomPanel = (id: string, step: PanelZoomV1) => settle(commands.panelsZoom(id, step));
 /** Brings a strip waiting at the window's edge out, or puts it back. */
 export const peekPanelStrip = (peek: boolean) => settle(commands.panelsPeekStrip(peek));
+/** Native watches presses in the window while a floating panel is open. */
+export const watchPanelClicks = (watching: boolean) => commands.panelsWatchClicks(watching);
 /** Native watches the window's edge while a panel strip waits there. */
 export const watchPanelEdge = (waiting: boolean) => commands.panelsWatchEdge(waiting);
 /** Pages step aside while the panel sheet is open: it is drawn beneath them. */
