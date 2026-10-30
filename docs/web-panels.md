@@ -108,17 +108,33 @@ Multi-Account Containers.
 - Links a panel opens arrive as tabs of the current space, in the panel's
   container. Panels and the open one come back after a restart.
 
-Known gaps in phase 1:
+Gaps closed after phase 1:
 
-- **Hidden sidebar:** while the sidebar auto-hides, panels are put away.
-  Revealing the sidebar raises the chrome over the page, and chrome that
-  spans the window for the strip would cover all of it. This needs its own
-  native work.
-- **No custom name or icon** yet; a panel shows its page's title and icon.
-- **Zoom** in a panel uses the page's own zoom keys only while the panel
-  has focus; there are no panel zoom controls yet.
-- **Page requests** from a panel (a blocked popup, a permission) have no
-  prompt of their own; they are refused.
+- **Hidden sidebar:** while the sidebar auto-hides, the open panel stays
+  docked and only the strip goes; chrome raised over the page never spans
+  the window. The strip returns with the sidebar.
+- **Names:** a panel can be named in its sheet.
+- **Zoom:** zoom in, out and back to actual size from the strip. Zoom
+  follows the site's level, as it does in tabs.
+- **Page requests:** permission prompts from the open panel are asked in
+  the sidebar, as a tab's are. Its blocked pop-ups, app links and sign-ins
+  show the tab request card there.
+
+## Phase 2 as built
+
+- **Per-panel settings** in the panel sheet: ask for the mobile site, load
+  when Zephium starts, unload when closed, unload after being closed for a
+  set time, and reload every so often. They persist with the panel.
+- **Mobile site:** the engine builds the panel's views with a phone user
+  agent (Safari on iPhone on macOS); changing it rebuilds the page.
+- **Unread badges** on strip icons, read from counts in page titles such as
+  "(3) Inbox".
+- **Show Web Panel 1-9** (Ctrl+Option+digit on macOS, unbound on Windows)
+  in the keyboard registry.
+- **Move Tab to Panels** on the tab menu: the page becomes a panel and the
+  tab closes.
+
+Still to do: a custom icon, phase 3.
 
 ## Decisions
 
