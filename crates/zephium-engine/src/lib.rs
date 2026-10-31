@@ -1,5 +1,7 @@
 #[cfg(feature = "agentic-browser")]
 mod agent_context_port;
+#[cfg(any(target_os = "windows", test))]
+mod container_profiles;
 pub mod page_menu;
 #[cfg(feature = "agentic-browser")]
 pub use agent_context_port::{
@@ -66,7 +68,7 @@ const MOBILE_USER_AGENT: &str = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleW
 /// store. Where it does not, container tabs are refused, never opened in the
 /// profile's own store.
 pub const fn container_storage_supported() -> bool {
-    cfg!(target_os = "macos")
+    cfg!(any(target_os = "macos", target_os = "windows"))
 }
 
 #[cfg(all(target_os = "windows", feature = "agentic-browser"))]
@@ -2375,7 +2377,7 @@ impl Engine for WebviewEngine {
         keep: Vec<zephium_core::ids::ContainerId>,
         done: Box<dyn FnOnce(bool) + Send>,
     ) {
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
         {
             if !lock_retirement_gate(&self.retirement).profile_is_active(profile) {
                 done(false);
@@ -2387,7 +2389,7 @@ impl Engine for WebviewEngine {
                 let _ = host::try_with(move |host| host.retain_container_data(profile, keep, done));
             });
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
             let _ = (profile, keep);
             done(true);

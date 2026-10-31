@@ -959,6 +959,15 @@ impl EngineHost {
                     .entry(profile)
                     .or_insert_with(|| wry::WebContext::new(Some(api_path))),
             );
+            // A container's page gets its own WebView2 profile in the same
+            // folder: same process, its own cookies and storage.
+            let builder = match partition {
+                Partition::Container(_, container) => {
+                    use wry::WebViewBuilderExtWindows;
+                    builder.with_profile_name(crate::container_profiles::profile_name(container))
+                }
+                _ => builder,
+            };
             (builder, path)
         };
         #[cfg(target_os = "macos")]
@@ -2126,6 +2135,27 @@ impl EngineHost {
                 event_permit.emit(&self.sink, EngineEvent::ViewCreationFailed { id: id.get() });
             }
             return None;
+        }
+        // The store is the postcondition, as on macOS: a container's page in
+        // exactly its own WebView2 profile, and no other page in any
+        // container's.
+        #[cfg(target_os = "windows")]
+        {
+            let actual = crate::platform::imp::content_profile_name(&view);
+            let bound = match (partition, actual.as_deref()) {
+                (Partition::Container(_, container), Ok(name)) => {
+                    crate::container_profiles::container_of(name) == Some(container)
+                }
+                (_, Ok(name)) => crate::container_profiles::container_of(name).is_none(),
+                (_, Err(_)) => false,
+            };
+            if !bound {
+                eprintln!("privacy: a page was not in the store its container names");
+                if report_failure {
+                    event_permit.emit(&self.sink, EngineEvent::ViewCreationFailed { id: id.get() });
+                }
+                return None;
+            }
         }
         #[cfg(target_os = "windows")]
         let mut security_policy = match crate::platform::imp::configure(

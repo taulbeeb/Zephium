@@ -25,9 +25,9 @@ pub(super) fn admitted_profile(
     let profile = match partition {
         Partition::Default(profile) | Partition::Persistent(profile) => profile,
         // Container stores exist only where the engine binds them.
-        #[cfg(target_os = "macos")]
+        #[cfg(any(target_os = "macos", target_os = "windows"))]
         Partition::Container(profile, _) => profile,
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         Partition::Container(..) => return Err(EngineDataFailure::Unsupported),
         Partition::Ephemeral(_) => return Err(EngineDataFailure::Unsupported),
     };
@@ -114,6 +114,82 @@ impl EngineHost {
 
 #[cfg(target_os = "windows")]
 impl EngineHost {
+    /// Clears the data of `profile`'s containers outside `keep`: each is a
+    /// WebView2 profile in the profile's folder, found by name. A page still
+    /// open in one of them keeps it, and the answer is `false`.
+    pub(crate) fn retain_container_data(
+        &mut self,
+        profile: ProfileId,
+        keep: Vec<zephium_core::ids::ContainerId>,
+        done: Box<dyn FnOnce(bool) + Send>,
+    ) {
+        if self.erasure_tombstones.contains(&profile) {
+            done(false);
+            return;
+        }
+        let in_use = self.partitions.values().any(|partition| match *partition {
+            Partition::Container(owner, container) => {
+                owner == profile && !keep.contains(&container)
+            }
+            _ => false,
+        });
+        if in_use {
+            done(false);
+            return;
+        }
+        let Ok(folder) = crate::erasure::prepare_profile_directory(&self.profiles_root, profile)
+        else {
+            done(false);
+            return;
+        };
+        let mut stale: Vec<_> = std::fs::read_dir(folder.join("EBWebView"))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
+            .filter_map(|entry| {
+                crate::container_profiles::container_of(&entry.file_name().to_string_lossy())
+            })
+            .filter(|container| !keep.contains(container))
+            .collect();
+        stale.sort();
+        stale.dedup();
+        self.clear_stale_containers(profile, stale, true, done);
+    }
+
+    /// Clears one stale container's data, then the next.
+    fn clear_stale_containers(
+        &mut self,
+        profile: ProfileId,
+        mut stale: Vec<zephium_core::ids::ContainerId>,
+        cleared: bool,
+        done: Box<dyn FnOnce(bool) + Send>,
+    ) {
+        let Some(container) = stale.pop() else {
+            done(cleared);
+            return;
+        };
+        let everything = zephium_core::browsing_data::EngineDataKinds {
+            history: true,
+            site_data: true,
+            cache: true,
+        };
+        self.windows_browsing_data(
+            Partition::Container(profile, container),
+            profile,
+            EngineDataCall::Clear {
+                kinds: everything,
+                since: None,
+            },
+            EngineDataCompletion::new(move |reply| {
+                let ok = cleared && matches!(reply, EngineDataReply::Cleared);
+                let _ = super::try_with(move |host| {
+                    host.clear_stale_containers(profile, stale, ok, done)
+                });
+            }),
+        );
+    }
+
     fn windows_browsing_data(
         &mut self,
         partition: Partition,
@@ -153,19 +229,22 @@ impl EngineHost {
     ) -> Option<(crate::platform::imp::browsing_data::DataTarget, bool)> {
         use crate::platform::imp::browsing_data::DataTarget;
         let profile = partition.profile();
+        // The data is the store's: a container's page reaches only its own
+        // container, and a profile's page never a container's.
+        let same_store = |owner: &Partition| match (*owner, partition) {
+            (Partition::Container(a, x), Partition::Container(b, y)) => a == b && x == y,
+            (Partition::Container(..), _) | (_, Partition::Container(..)) => false,
+            (owner, _) => owner.profile() == profile,
+        };
         let open = self
             .views
             .iter()
-            .find(|(id, _)| {
-                self.partitions
-                    .get(id)
-                    .is_some_and(|owner| owner.profile() == profile)
-            })
+            .find(|(id, _)| self.partitions.get(id).is_some_and(same_store))
             .map(|(_, view)| view)
             .or_else(|| {
                 self.spare
                     .as_ref()
-                    .filter(|spare| spare.partition.profile() == profile)
+                    .filter(|spare| same_store(&spare.partition))
                     .map(|spare| &spare.view)
             });
         if let Some(view) = open {

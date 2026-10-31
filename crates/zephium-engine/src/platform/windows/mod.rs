@@ -270,6 +270,23 @@ fn take_pwstr_bounded_into(
 /// schemes. This runs after controller construction but before the first
 /// navigation. Any missing interface or failed registration rejects the view;
 /// silently continuing would let a hostile page reach Windows shell handlers.
+/// The WebView2 profile a content page is in.
+pub fn content_profile_name(webview: &wry::WebView) -> windows_core::Result<String> {
+    use wry::WebViewExtWindows as _;
+    let core = unsafe { webview.controller().CoreWebView2()? };
+    let profile = unsafe { core.cast::<ICoreWebView2_13>()?.Profile()? };
+    let mut raw = windows_core::PWSTR::null();
+    // SAFETY: `profile` is live and `raw` a valid out pointer; WebView2
+    // allocates the string and the bounded helper frees it exactly once.
+    unsafe { profile.ProfileName(&mut raw)? };
+    take_pwstr_bounded(raw, 64, 64).ok_or_else(|| {
+        windows_core::Error::new(
+            windows::Win32::Foundation::E_UNEXPECTED,
+            "WebView2 profile name was not bounded text",
+        )
+    })
+}
+
 pub fn configure(
     webview: &wry::WebView,
     _radius: f64,

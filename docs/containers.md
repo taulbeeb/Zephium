@@ -60,11 +60,15 @@ and per profile, and never equal to the profile's own identifier or Work's.
 - **macOS**: the view is built from the profile's extension-bearing
   configuration and bound to `WKWebsiteDataStore(forIdentifier:)` with the
   derived identifier. Storage attestation checks the exact identifier.
-- **Windows**: a WebView2 profile name inside the profile's own environment
-  (`ICoreWebView2ControllerOptions::ProfileName`). This keeps the profile's
-  data folder as the single deletion root. Not enabled yet; until it is
-  implemented and qualified the shell refuses to create container tabs on
-  Windows rather than open them in the profile's own store.
+- **Windows**: a WebView2 profile named `container-<id>` inside the
+  profile's own environment (`ICoreWebView2ControllerOptions::ProfileName`),
+  so the profile's data folder stays the single deletion root. After a view
+  is built its `ProfileName` is the postcondition: a container's page must
+  be in exactly its own profile, and no other page in any container's.
+  Data calls reach a container through one of its pages, or a hidden one
+  opened for the call. A deleted container's profile is found by name under
+  `EBWebView` and cleared of everything; the empty folder goes with the
+  Zephium profile.
 - **Linux**: not a supported platform; container tabs are refused.
 
 ## Erasure
@@ -86,10 +90,14 @@ and per profile, and never equal to the profile's own identifier or Work's.
 
 ## Status and known gaps
 
-Built on this branch: phases 1 to 4 below, macOS only.
+Built on this branch: phases 1 to 5 below, on macOS and Windows.
 
-- **Windows and Linux** refuse container tabs and hide the menus; no
-  container store is ever opened there.
+- **Linux** refuses container tabs and hides the menus; no container store
+  is ever opened there.
+- **Windows extensions** are installed per WebView2 profile, so they do not
+  run in container tabs on Windows.
+- **Windows has not been run.** It type-checks and follows the pattern Work
+  mode already uses for its own WebView2 profiles.
 - **Settings › Privacy › Site data** lists only the profile's own store.
   Clearing data, all of it or one site's, reaches every container too.
 - **Extensions** run in container tabs with the profile's extension runtime.
